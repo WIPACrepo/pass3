@@ -1,0 +1,11 @@
+FROM almalinux:9.5
+
+RUN dnf config-manager --set-enabled crb
+
+RUN dnf -y install epel-release
+
+RUN dnf -y update && dnf -y upgrade
+
+RUN dnf group install "Development Tools"
+
+
