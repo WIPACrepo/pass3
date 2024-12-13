@@ -1,5 +1,9 @@
 FROM almalinux:9.5
 
+ARG CPUS=10
+
+RUN dnf -y install 'dnf-command(config-manager)'
+
 RUN dnf config-manager --set-enabled crb
 
 RUN dnf -y install epel-release
@@ -12,8 +16,10 @@ RUN mkdir -p /cvmfs/icecube.opensciencegrid.org
 
 RUN mkdir /usr/local/cvmfs_src
 
-RUN git clone https://github.com/WIPACrepo/cvmfs.git /usr/local/cvmfs_src
-
 WORKDIR /usr/local/cvmfs_src
 
-RUN spack/build_v2.py py3-v4.3.0 --dest /cvmfs/icecube.opensciencegrid.org --src ../icecube.opensciencegrid.org
+RUN git init && git checkout -b pass3  && git config advice.detachedHead false
+
+RUN git pull --depth 1 https://github.com/WIPACrepo/cvmfs.git pass3
+
+RUN python3 spack/build_v2.py py3-v4.3.0 --dest /cvmfs/icecube.opensciencegrid.org --src icecube.opensciencegrid.org --spack-version v0.20.0
