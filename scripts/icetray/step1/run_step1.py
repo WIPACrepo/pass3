@@ -1,28 +1,42 @@
 import argparse
 import subprocess
+import concurrent.futures
 
 def run_commands_parallel(commands, max_num=20):
-    processes = []
-    for command in commands:
-        if len(processes) > max_num:
-            processes[0].wait()
-            processes = processes[1:]
+    with concurrent.futures.ProcessPoolExecutor() as executor:
 
-        process = subprocess.Popen(command, shell=True)
-        processes.append(process)
+def run_command(
 
-    # Wait for all processes to complete
-    for process in processes:
-        process.wait()
+
+def generate_command(infiles, gcd):
+    base_env = "s"
+    base_icetray_env = "x"
+    
+     
+
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-                    
-)
-    
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--gcd', 
+                        help="GCD File", 
+                        type=str, 
+                        required=True)
+    parser.add_argument("--files", 
+                        help="", 
+                        type="+",
+                        required=True)
+    parser.add_argument("--outdir", 
+                        help="",
+                        type=str,
+                        required=True)
+    parser.add_argument("--numcpus", 
+                        help="",
+                        type=int,
+                        default=5)
 
 
-  num_processes = 5
-  commands = [f"sleep {i}" for i in range(1, num_processes + 1)] # Example commands
-  run_commands_parallel(commands)
-  print("All processes finished")
+    command = f"ls -la"
+    commands = [
+        f"{command} {i}" for i in args.files] # Example commands
+    run_commands_parallel(commands, args.numcpus)
+    print("All processes finished")
