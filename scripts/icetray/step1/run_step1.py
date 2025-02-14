@@ -6,6 +6,7 @@ import time
 import datetime
 import sys
 import os
+import multiprocessing
 
 from pathlib import Path, PosixPath
 
@@ -15,33 +16,30 @@ def runner(infiles: tuple[Path, Path]):
     infile = infiles[1]
     outdir = infiles[2]
     if not gcd.exists():
-        print("No GCD")
-        sys.exit(1)
+        raise Exception("No GCD")
     if not infile.exists():
-        print("No Input File")
-        sys.exit(1)
+        raise Exception("No Input File")
     outfile = get_outfilename(infile, outdir)
     if outfile.exists():
-        print("Output file already exists")
-        sys.exit(1)
+        raise Exception("Output file already exists")
     command = generate_command(infile, gcd, outfile)
     stdout_file, stderr_file = get_logfilenames(infile, outdir)
     if stdout_file.exists() or stderr_file.exists():
-        print("Log files already exists")
-        sys.exit(1)
+        raise Exception("Log files already exists")
     with open(stdout_file, "w") as stdout, open(stderr_file, "w") as stderr:
-        stdout.write(f"Start Time: {datetime.datetime.now()}\n")
+        stdout.write(f"Start Time: {datetime.datetime.utcnow()}\n")
         # subprocess.run(command, shell=True, stdout=stdout, stderr=stderr)
-        stdout.write(f"End Time: {datetime.datetime.now()}\n")
+        stdout.write(f"End Time: {datetime.datetime.utcnow()}\n")
     # TODO: create checks file contents
     # Need a script that counts number of frames and checks total charge per event
+    # put in the pass3 step1 script?
     # create checksum of output file
     sha512sum = get_sha512sum(outfile)
     print(f"file: {outfile} sha512sum: {sha512sum}")
     with open(outfile + ".sha512sum", "w"):
         file.write(f"{sha512sum}")
 
-def run_parallel(infiles, max_num=20):
+def run_parallel(infiles, max_num=1):
     with concurrent.futures.ProcessPoolExecutor(
         max_workers = max_num) as executor:
         futures = executor.map(runner, infiles)
@@ -60,6 +58,7 @@ def get_sha512sum(filename: str) -> str:
     return h.hexdigest()
 
 def remove_extention(path: PosixPath) -> PosixPath:
+    """Remove multiple suffixes from filename"""
     suffixes = ''.join(path.suffixes)
     return Path(str(path).replace(suffixes, ''))
 
@@ -103,13 +102,18 @@ if __name__ == "__main__":
                         help="",
                         type=str,
                         required=True)
-    parser.add_argument("--numcpus", 
+    parser.add_argument("--maxnumcpus", 
                         help="",
                         type=int,
-                        default=5)
+                        default=0)
     args=parser.parse_args()
+
+    if args.maxnumcpus == 0:
+        numcpus = multiprocessing.cpu_count() 
+    else:
+        numcpus = args.maxnumcpus
 
     Path(args.outdir).mkdir(parents=True, exist_ok=True)
 
     commands = [(Path(args.gcd), Path(f), Path(args.outdir)) for f in args.files]
-    run_parallel(commands, args.numcpus)
+    run_parallel(commands, numcpus)
