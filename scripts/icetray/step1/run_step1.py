@@ -1,43 +1,90 @@
 import argparse
 import subprocess
-import concurrent.futures
 import hashlib
 import time
 import datetime
 import sys
 import os
 import multiprocessing
+import zipfile
+import shutil
 
 from pathlib import Path, PosixPath
+import concurrent.futures
 
 def runner(infiles: tuple[Path, Path]):
-    # run step 1
-    gcd = infiles[0]
-    infile = infiles[1]
-    outdir = infiles[2]
+    # Creating a dir on the local disk
+    tmpdir = Path(tempfile.mkdtemp(dir="/tmp"))
+
+    # Getting file and file paths
+    gcddir = infiles[0]
+    bundle = infiles[1]
+    infile = infiles[2]
+    outdir = infiles[3]
+
+    gcd = get_gcd(infile, gcddir)
     if not gcd.exists():
         raise Exception("No GCD")
-    if not infile.exists():
+
+    # Prepping files and file paths
+    ## Extracting in file from bundle
+    zipfile.ZipFile(bundle).extract(infile, path=tmpdir)
+    local_infile = tmpdir / infile
+    if not local_infile.exists():
         raise Exception("No Input File")
-    outfile = get_outfilename(infile, outdir)
+
+    outfilename = get_outfilename(infile, outdir)
+    local_temp_outfile = tmpdir / "tmp_" + outfilename
+    local_outfile = tmpdir / outfilename
+    outfile = outdir / outfilename
+
     if outfile.exists():
         raise Exception("Output file already exists")
-    command = generate_command(infile, gcd, outfile)
-    stdout_file, stderr_file = get_logfilenames(infile, outdir)
-    if stdout_file.exists() or stderr_file.exists():
-        raise Exception("Log files already exists")
-    with open(stdout_file, "w") as stdout, open(stderr_file, "w") as stderr:
-        stdout.write(f"Start Time: {datetime.datetime.utcnow()}\n")
-        # subprocess.run(command, shell=True, stdout=stdout, stderr=stderr)
-        stdout.write(f"End Time: {datetime.datetime.utcnow()}\n")
-    # TODO: create checks file contents
-    # Need a script that counts number of frames and checks total charge per event
-    # put in the pass3 step1 script?
+
+    local_stdout_file, local_stderr_file = get_logfilenames(infile,
+                                                            tmpdir)
+    stdout_file, stderr_file = get_logfilenames(infile,
+                                                outdir)
+
+    command = generate_command(local_infile, gcd, local_temp_outfile)
+    moni_command = generate_moni_command(local_temp_outfile, gcd, local_outfile)
+
+    # run step 1
+    with open(local_stdout_file, "w") as stdout, open(local_stderr_file, "w") as stderr:
+        stdout.write(
+                f"Start Time: {datetime.datetime.now(datetime.timezone.utc)}\n")
+        stdout.write(f"Hostname: {os.environ['HOSTNAME']}")
+        try:
+            subprocess.run(command, shell=True, stdout=stdout, stderr=stderr)
+        except:
+            raise Exception(
+                f"ALERT: {infile} in {bundle} has failed to process")
+        stdout.write(
+                f"End Time PFRAW: {datetime.datetime.now(datetime.timezone.utc)}\n")
+        try:
+            subprocess.run(
+                moni_command, shell=True, stdout=stdout, stderr=stderr)
+        except:
+            raise Exception(
+                f"ALERT: {infile} in {bundle} has failed during moni")
+        stdout.write(
+                f"End Time: {datetime.datetime.now(datetime.timezone.utc)}\n")
+
     # create checksum of output file
-    sha512sum = get_sha512sum(outfile)
-    print(f"file: {outfile} sha512sum: {sha512sum}")
+    sha512sum = get_sha512sum(local_outfile)
+    print(f"file: {local_outfile} sha512sum: {sha512sum}")
     with open(outfile + ".sha512sum", "w"):
         file.write(f"{sha512sum}")
+
+    # Copying from local dir to absolute dir
+    shutil.copyfile(local_stdout_file, stdout_file)
+    shutil.copyfile(local_stderr_file, stderr_file)
+    shutil.copyfile(local_outfile, outfile)
+    # TODO: move charge and filter rate file
+    shutil.copyfile(local_outfile + ".npz", outfile + ".npz",)
+    shutil.copyfile(local_outfile + ".txt", outfile + ".txt")
+
+    shutil.rmtree(tmpdir)
 
 def run_parallel(infiles, max_num=1):
     with concurrent.futures.ProcessPoolExecutor(
@@ -57,24 +104,23 @@ def get_sha512sum(filename: str) -> str:
             h.update(mv[:n])
     return h.hexdigest()
 
-def remove_extention(path: PosixPath) -> PosixPath:
+def remove_extension(path: PosixPath) -> PosixPath:
     """Remove multiple suffixes from filename"""
     suffixes = ''.join(path.suffixes)
     return Path(str(path).replace(suffixes, ''))
 
-def get_outfilename(infile: Path, outdir: Path) -> Path:
+def get_outfilename(infile: Path) -> Path:
     # Assuming Format of infile name is:
     # PFRaw_PhysicsFiltering_Run<RunNumber>_Subrun<SubRunNumber>_<FileNumber>.tar.gz
-    infilename = str(remove_extention(infile))
+    infilename = str(remove_extension(infile))
     infilenwords = infilename.split('_')
     outfilewords = ["Pass3", "Step1"] + infilenwords[1:]
-    outfilename = outdir / ("_".join(outfilewords) + ".i3.zst")
-    return outfilename
+    return "_".join(outfilewords) + ".i3.zst"
 
 def get_logfilenames(infile: Path, outdir: Path) -> tuple[Path, Path]:
     # Assuming Format of infile name is:
     # PFRaw_PhysicsFiltering_Run<RunNumber>_Subrun<SubRunNumber>_<FileNumber>.tar.gz
-    infilename = str(remove_extention(infile))
+    infilename = str(remove_extension(infile))
     infilenwords = infilename.split('_')
     stdoutfilename = "_".join([
         "LOG", "OUT","Pass3", "Step1"] + infilenwords[1:]) + ".out"
@@ -83,20 +129,39 @@ def get_logfilenames(infile: Path, outdir: Path) -> tuple[Path, Path]:
     return outdir / stdoutfilename, outdir / stderrfilename
 
 def generate_command(infile, gcd, outfile):
+    # TODO: Figure out if we can load the eval and env-shell in the container
     envshell_loc = "/cvmfs/icecube.opensciencegrid.org/py3-v4.4.0/RHEL_9_x86_64_v2/metaprojects/icetray/v1.13.0/bin/icetray-shell"
     scriptloc = os.environ['I3_BUILD'] + "offline_filterscripts/resources/scripts/pass3_reprocess_PFRaw.py"
-    return envshell_loc + " python3 " + scriptloc + f" -i {infile} -g {gcd} -o {outfile} --qify" 
+    command = envshell_loc + " python3 " + scriptloc + f" -i {infile} -g {gcd} -o {outfile} --qify" 
+    return command
 
+def generate_moni_command(infile:Path , gcd, outfile):
+    envshell_loc = "/cvmfs/icecube.opensciencegrid.org/py3-v4.4.0/RHEL_9_x86_64_v2/metaprojects/icetray/v1.13.0/bin/icetray-shell"
+    scriptloc = os.environ['I3_BUILD'] + "offline_filterscripts/resources/scripts/pass3_check_charge_filter.py"
+    command = envshell_loc + " python3 " + scriptloc + f" -i {infile} -g {gcd} -o {outfile}
+    return command
+
+def get_gcd(infile: Path, gcddir: Path):
+    if not gcddir.exists():
+        raise Exception("No GCD Dir")
+    # Assuming Format of infile name is:
+    # PFRaw_PhysicsFiltering_Run<RunNumber>_Subrun<SubRunNumber>_<FileNumber>.tar.gz
+    runnum = int(infile.split('_')[2][2:])
+    gcdfiles = gcddir.glob(f"*{runnum}*")
+    if len(gcdfiles) > 1:
+        raise Exception(f"Multiple GCD Files {gcdfiles}")
+    else:
+        return gcdfiles[0]
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--gcd', 
+    parser.add_argument('--gcddir', 
                         help="GCD File", 
                         type=str, 
                         required=True)
-    parser.add_argument("--files", 
+    parser.add_argument("--bundle", 
                         help="", 
-                        nargs='+',
+                        type=str,
                         required=True)
     parser.add_argument("--outdir", 
                         help="",
@@ -115,5 +180,21 @@ if __name__ == "__main__":
 
     Path(args.outdir).mkdir(parents=True, exist_ok=True)
 
-    commands = [(Path(args.gcd), Path(f), Path(args.outdir)) for f in args.files]
+    infiles = [f for f in zipfile.ZipFile(args.bundle).namelist() 
+               if ".tar.gz" in f]
+    
+    if len(infiles) == 0:
+        raise Exception(f"No input files found in bundle {args.bundle}")
+    
+    commands = [
+        (Path(args.gcddir), 
+         Path(args.bundle), 
+         Path(f), 
+         Path(args.outdir)) 
+         for f in infiles]
+
     run_parallel(commands, numcpus)
+
+    shutil.rmtree(args.bundle)
+
+    # TODO: Delete bundle
