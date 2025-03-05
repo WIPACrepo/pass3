@@ -31,7 +31,7 @@ RUN git clone https://github.com/WIPACrepo/pass3.git /opt/pass3
 
 RUN eval `/cvmfs/icecube.opensciencegrid.org/py3-v4.4.0/setup.sh`
 
-ENTRYPOINT ["/bin/bash", "/opt/icetray/bin/icetray-shell", "exec"]
+ENTRYPOINT ["/bin/bash", "/cvmfs/icecube.opensciencegrid.org/py3-v4.4.0/RHEL_9_x86_64_v3/metaprojects/icetray/v1.13.0/bin/icetray-shell", "exec"]
 CMD ["/bin/bash"]
 
 

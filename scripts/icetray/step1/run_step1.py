@@ -64,7 +64,7 @@ def generate_moni_command(infile: Path, gcd: Path, outfile: Path) -> str:
 
 # Taken from LTA
 # Adapted from: https://stackoverflow.com/a/44873382
-def get_sha512sum(filename: str) -> str:
+def get_sha512sum(filename: str | Path) -> str:
     """Compute the SHA512 hash of the data in the specified file."""
     h = hashlib.sha512()
     b = bytearray(128 * 1024)
@@ -162,14 +162,18 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--gcddir', 
                         help="GCD File", 
-                        type=str, 
+                        type=Path, 
                         required=True)
     parser.add_argument("--bundle", 
-                        help="", 
-                        type=str,
+                        help="path to bundle on ranch", 
+                        type=Path,
                         required=True)
     parser.add_argument("--outdir", 
                         help="",
+                        type=Path,
+                        required=True)
+    parser.add_argument("--checksum",
+                        help="bundle sha512sum",
                         type=str,
                         required=True)
     parser.add_argument("--maxnumcpus", 
@@ -181,25 +185,36 @@ if __name__ == "__main__":
     if args.maxnumcpus == 0:
         numcpus = multiprocessing.cpu_count() 
     else:
-        numcpus = args.maxnumcpus
+        numcpus = args.maxnumcpus   
+    
+    if not args.outdir.exists():
+        Path(args.outdir).mkdir(parents=True, exist_ok=True)
 
-    Path(args.outdir).mkdir(parents=True, exist_ok=True)
+    if not (args.outdir / args.bundle.name).exists():
+            subprocess.run(f"scp {os.environ["$ARCHIVER"]}:{args.bundle} {args.outdir}")
+        bundle_sha512sum = get_sha512sum(args.outdir / args.bundle.name)
+        if bundle_sha512sum != args.checksum:
+            raise Exception(f"Bundle {args.bundle} checksum is not the same")
 
-    infiles = [f for f in zipfile.ZipFile(args.bundle).namelist() 
+    scratch_bundle_loc = args.outdir / args.bundle.name
+
+    infiles = [f for f in zipfile.ZipFile(scratch_bundle_loc).namelist() 
                if ".tar.gz" in f]
     
     if len(infiles) == 0:
         raise FileNotFoundError(
             f"No input files found in bundle {args.bundle}")
     
-    commands = [
+    inputs = [
         (Path(args.gcddir), 
-         Path(args.bundle), 
+         Path(scratch_bundle_loc), 
          Path(f), 
          Path(args.outdir)) 
          for f in infiles]
 
-    run_parallel(commands, numcpus)
+    print(inputs)
+         
+    # run_parallel(inputs, numcpus)
 
     # TODO: Delete bundle
     # shutil.rmtree(args.bundle)
