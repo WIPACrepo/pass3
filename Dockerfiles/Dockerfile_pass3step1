@@ -24,4 +24,15 @@ RUN git clone https://github.com/WIPACrepo/cvmfs.git --branch pass3 .
 
 RUN python3 spack/build_v2.py py3-v4.4.0 --dest /cvmfs/icecube.opensciencegrid.org --src icecube.opensciencegrid.org --spack-target x86_64_v3
 
+RUN python3 spack/build_v2.py py3-v4.4.0-metaprojects --dest /cvmfs/icecube.opensciencegrid.org --src icecube.opensciencegrid.org --spack-target x86_64_v3
+
+# Need to add tag for Step 1 here
+RUN git clone https://github.com/WIPACrepo/pass3.git /opt/pass3
+
+RUN eval `/cvmfs/icecube.opensciencegrid.org/py3-v4.4.0/setup.sh`
+
+ENTRYPOINT ["/bin/bash", "/opt/icetray/bin/icetray-shell", "exec"]
+CMD ["/bin/bash"]
+
+
 

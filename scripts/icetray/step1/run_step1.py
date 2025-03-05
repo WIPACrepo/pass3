@@ -8,11 +8,74 @@ import os
 import multiprocessing
 import zipfile
 import shutil
+import tempfile
 
 from pathlib import Path, PosixPath
 import concurrent.futures
 
-def runner(infiles: tuple[Path, Path]):
+def remove_extension(path: PosixPath) -> PosixPath:
+    """Remove multiple suffixes from filename"""
+    suffixes = ''.join(path.suffixes)
+    return Path(str(path).replace(suffixes, ''))
+
+def get_gcd(infile: Path, gcddir: Path) -> Path:
+    if not gcddir.exists():
+        raise Exception("No GCD dir")
+    # Assuming Format of infile name is:
+    # PFRaw_PhysicsFiltering_Run<RunNumber>_Subrun<SubRunNumber>_<FileNumber>.tar.gz
+    runnum = int(infile.split('_')[2][2:])
+    gcdfiles = gcddir.glob(f"*{runnum}*")
+    if len(gcdfiles) > 1:
+        raise Exception(f"Multiple GCD Files {gcdfiles}")
+    else:
+        return gcdfiles[0]
+
+def get_outfilename(infile: Path) -> Path:
+    # Assuming Format of infile name is:
+    # PFRaw_PhysicsFiltering_Run<RunNumber>_Subrun<SubRunNumber>_<FileNumber>.tar.gz
+    infilename = str(remove_extension(infile))
+    infilenwords = infilename.split('_')
+    outfilewords = ["Pass3", "Step1"] + infilenwords[1:]
+    return "_".join(outfilewords) + ".i3.zst"
+
+def get_logfilenames(infile: Path, outdir: Path) -> tuple[Path, Path]:
+    # Assuming Format of infile name is:
+    # PFRaw_PhysicsFiltering_Run<RunNumber>_Subrun<SubRunNumber>_<FileNumber>.tar.gz
+    infilename = str(remove_extension(infile))
+    infilenwords = infilename.split('_')
+    stdoutfilename = "_".join([
+        "LOG", "OUT","Pass3", "Step1"] + infilenwords[1:]) + ".out"
+    stderrfilename = "_".join(
+        ["LOG", "ERR","Pass3", "Step1"] + infilenwords[1:]) + ".err"
+    return outdir / stdoutfilename, outdir / stderrfilename
+
+def generate_command(infile: Path, gcd: Path, outfile: Path) -> str:
+    # TODO: Figure out if we can load the eval and env-shell in the container
+    envshell_loc = "/cvmfs/icecube.opensciencegrid.org/py3-v4.4.0/RHEL_9_x86_64_v2/metaprojects/icetray/v1.13.0/bin/icetray-shell"
+    scriptloc = os.environ['I3_BUILD'] + "offline_filterscripts/resources/scripts/pass3_reprocess_PFRaw.py"
+    command = envshell_loc + " python3 " + scriptloc + f" -i {infile} -g {gcd} -o {outfile} --qify" 
+    return command
+
+def generate_moni_command(infile: Path, gcd: Path, outfile: Path) -> str:
+    envshell_loc = "/cvmfs/icecube.opensciencegrid.org/py3-v4.4.0/RHEL_9_x86_64_v2/metaprojects/icetray/v1.13.0/bin/icetray-shell"
+    scriptloc = os.environ['I3_BUILD'] + "offline_filterscripts/resources/scripts/pass3_check_charge_filter.py"
+    command = envshell_loc + " python3 " + scriptloc + f" -i {infile} -g {gcd} -o {outfile}
+    return command
+
+# Taken from LTA
+# Adapted from: https://stackoverflow.com/a/44873382
+def get_sha512sum(filename: str) -> str:
+    """Compute the SHA512 hash of the data in the specified file."""
+    h = hashlib.sha512()
+    b = bytearray(128 * 1024)
+    mv = memoryview(b)
+    with open(filename, 'rb', buffering=0) as f:
+        # Known issue with MyPy: https://github.com/python/typeshed/issues/2166
+        for n in iter(lambda: f.readinto(mv), 0):
+            h.update(mv[:n])
+    return h.hexdigest()
+
+def runner(infiles: tuple[Path, Path, Path, Path]):
     # Creating a dir on the local disk
     tmpdir = Path(tempfile.mkdtemp(dir="/tmp"))
 
@@ -24,14 +87,14 @@ def runner(infiles: tuple[Path, Path]):
 
     gcd = get_gcd(infile, gcddir)
     if not gcd.exists():
-        raise Exception("No GCD")
+        raise FileNotFoundError("No GCD")
 
     # Prepping files and file paths
     ## Extracting in file from bundle
     zipfile.ZipFile(bundle).extract(infile, path=tmpdir)
     local_infile = tmpdir / infile
     if not local_infile.exists():
-        raise Exception("No Input File")
+        raise FileNotFoundError("No Input File")
 
     outfilename = get_outfilename(infile, outdir)
     local_temp_outfile = tmpdir / "tmp_" + outfilename
@@ -50,7 +113,11 @@ def runner(infiles: tuple[Path, Path]):
     moni_command = generate_moni_command(local_temp_outfile, gcd, local_outfile)
 
     # run step 1
+    # We are first running the online processing that is the same as done 
+    # at the south pole. we then read the file back in, rehydrate it, and 
+    # run some moni code on it to make sure we are doing the right thing.
     with open(local_stdout_file, "w") as stdout, open(local_stderr_file, "w") as stderr:
+        # TODO: Do we need to check the GCD file?
         stdout.write(
                 f"Start Time: {datetime.datetime.now(datetime.timezone.utc)}\n")
         stdout.write(f"Hostname: {os.environ['HOSTNAME']}")
@@ -91,68 +158,6 @@ def run_parallel(infiles, max_num=1):
         max_workers = max_num) as executor:
         futures = executor.map(runner, infiles)
 
-# Taken from LTA
-# Adapted from: https://stackoverflow.com/a/44873382
-def get_sha512sum(filename: str) -> str:
-    """Compute the SHA512 hash of the data in the specified file."""
-    h = hashlib.sha512()
-    b = bytearray(128 * 1024)
-    mv = memoryview(b)
-    with open(filename, 'rb', buffering=0) as f:
-        # Known issue with MyPy: https://github.com/python/typeshed/issues/2166
-        for n in iter(lambda: f.readinto(mv), 0):
-            h.update(mv[:n])
-    return h.hexdigest()
-
-def remove_extension(path: PosixPath) -> PosixPath:
-    """Remove multiple suffixes from filename"""
-    suffixes = ''.join(path.suffixes)
-    return Path(str(path).replace(suffixes, ''))
-
-def get_outfilename(infile: Path) -> Path:
-    # Assuming Format of infile name is:
-    # PFRaw_PhysicsFiltering_Run<RunNumber>_Subrun<SubRunNumber>_<FileNumber>.tar.gz
-    infilename = str(remove_extension(infile))
-    infilenwords = infilename.split('_')
-    outfilewords = ["Pass3", "Step1"] + infilenwords[1:]
-    return "_".join(outfilewords) + ".i3.zst"
-
-def get_logfilenames(infile: Path, outdir: Path) -> tuple[Path, Path]:
-    # Assuming Format of infile name is:
-    # PFRaw_PhysicsFiltering_Run<RunNumber>_Subrun<SubRunNumber>_<FileNumber>.tar.gz
-    infilename = str(remove_extension(infile))
-    infilenwords = infilename.split('_')
-    stdoutfilename = "_".join([
-        "LOG", "OUT","Pass3", "Step1"] + infilenwords[1:]) + ".out"
-    stderrfilename = "_".join(
-        ["LOG", "ERR","Pass3", "Step1"] + infilenwords[1:]) + ".err"
-    return outdir / stdoutfilename, outdir / stderrfilename
-
-def generate_command(infile, gcd, outfile):
-    # TODO: Figure out if we can load the eval and env-shell in the container
-    envshell_loc = "/cvmfs/icecube.opensciencegrid.org/py3-v4.4.0/RHEL_9_x86_64_v2/metaprojects/icetray/v1.13.0/bin/icetray-shell"
-    scriptloc = os.environ['I3_BUILD'] + "offline_filterscripts/resources/scripts/pass3_reprocess_PFRaw.py"
-    command = envshell_loc + " python3 " + scriptloc + f" -i {infile} -g {gcd} -o {outfile} --qify" 
-    return command
-
-def generate_moni_command(infile:Path , gcd, outfile):
-    envshell_loc = "/cvmfs/icecube.opensciencegrid.org/py3-v4.4.0/RHEL_9_x86_64_v2/metaprojects/icetray/v1.13.0/bin/icetray-shell"
-    scriptloc = os.environ['I3_BUILD'] + "offline_filterscripts/resources/scripts/pass3_check_charge_filter.py"
-    command = envshell_loc + " python3 " + scriptloc + f" -i {infile} -g {gcd} -o {outfile}
-    return command
-
-def get_gcd(infile: Path, gcddir: Path):
-    if not gcddir.exists():
-        raise Exception("No GCD Dir")
-    # Assuming Format of infile name is:
-    # PFRaw_PhysicsFiltering_Run<RunNumber>_Subrun<SubRunNumber>_<FileNumber>.tar.gz
-    runnum = int(infile.split('_')[2][2:])
-    gcdfiles = gcddir.glob(f"*{runnum}*")
-    if len(gcdfiles) > 1:
-        raise Exception(f"Multiple GCD Files {gcdfiles}")
-    else:
-        return gcdfiles[0]
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--gcddir', 
@@ -184,7 +189,8 @@ if __name__ == "__main__":
                if ".tar.gz" in f]
     
     if len(infiles) == 0:
-        raise Exception(f"No input files found in bundle {args.bundle}")
+        raise FileNotFoundError(
+            f"No input files found in bundle {args.bundle}")
     
     commands = [
         (Path(args.gcddir), 
@@ -195,6 +201,6 @@ if __name__ == "__main__":
 
     run_parallel(commands, numcpus)
 
-    shutil.rmtree(args.bundle)
-
     # TODO: Delete bundle
+    # shutil.rmtree(args.bundle)
+
