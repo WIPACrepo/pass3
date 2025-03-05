@@ -12,8 +12,9 @@ import tempfile
 
 from pathlib import Path, PosixPath
 import concurrent.futures
+from typing import Union
 
-def remove_extension(path: PosixPath) -> PosixPath:
+def remove_extension(path: Path) -> Path:
     """Remove multiple suffixes from filename"""
     suffixes = ''.join(path.suffixes)
     return Path(str(path).replace(suffixes, ''))
@@ -59,12 +60,12 @@ def generate_command(infile: Path, gcd: Path, outfile: Path) -> str:
 def generate_moni_command(infile: Path, gcd: Path, outfile: Path) -> str:
     envshell_loc = "/cvmfs/icecube.opensciencegrid.org/py3-v4.4.0/RHEL_9_x86_64_v2/metaprojects/icetray/v1.13.0/bin/icetray-shell"
     scriptloc = os.environ['I3_BUILD'] + "offline_filterscripts/resources/scripts/pass3_check_charge_filter.py"
-    command = envshell_loc + " python3 " + scriptloc + f" -i {infile} -g {gcd} -o {outfile}
+    command = envshell_loc + " python3 " + scriptloc + f" -i {infile} -g {gcd} -o {outfile}"
     return command
 
 # Taken from LTA
 # Adapted from: https://stackoverflow.com/a/44873382
-def get_sha512sum(filename: str | Path) -> str:
+def get_sha512sum(filename: Union[str, Path]) -> str:
     """Compute the SHA512 hash of the data in the specified file."""
     h = hashlib.sha512()
     b = bytearray(128 * 1024)
@@ -191,7 +192,7 @@ if __name__ == "__main__":
         Path(args.outdir).mkdir(parents=True, exist_ok=True)
 
     if not (args.outdir / args.bundle.name).exists():
-            subprocess.run(f"scp {os.environ["$ARCHIVER"]}:{args.bundle} {args.outdir}")
+        subprocess.run(f"scp {os.environ['$ARCHIVER']}:{args.bundle} {args.outdir}")
         bundle_sha512sum = get_sha512sum(args.outdir / args.bundle.name)
         if bundle_sha512sum != args.checksum:
             raise Exception(f"Bundle {args.bundle} checksum is not the same")
