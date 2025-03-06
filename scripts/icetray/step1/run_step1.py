@@ -21,15 +21,17 @@ def remove_extension(path: Path) -> Path:
 
 def get_gcd(infile: Path, gcddir: Path) -> Path:
     if not gcddir.exists():
-        raise Exception("No GCD dir")
+        raise FileNotFoundError("No GCD dir")
     # Assuming Format of infile name is:
     # PFRaw_PhysicsFiltering_Run<RunNumber>_Subrun<SubRunNumber>_<FileNumber>.tar.gz
-    runnum = int(infile.split('_')[2][2:])
-    gcdfiles = gcddir.glob(f"*{runnum}*")
+    runnum = int(str(infile).split('_')[2][3:])
+    gcdfiles = list(gcddir.glob(f"*{runnum}*"))
     if len(gcdfiles) > 1:
         raise Exception(f"Multiple GCD Files {gcdfiles}")
-    else:
+    elif len(gcdfiles) == 1:
         return gcdfiles[0]
+    else:
+        FileNotFoundError("No GCD found")
 
 def get_outfilename(infile: Path) -> Path:
     # Assuming Format of infile name is:
@@ -52,14 +54,18 @@ def get_logfilenames(infile: Path, outdir: Path) -> tuple[Path, Path]:
 
 def generate_command(infile: Path, gcd: Path, outfile: Path) -> str:
     # TODO: Figure out if we can load the eval and env-shell in the container
-    envshell_loc = "/cvmfs/icecube.opensciencegrid.org/py3-v4.4.0/RHEL_9_x86_64_v2/metaprojects/icetray/v1.13.0/bin/icetray-shell"
-    scriptloc = os.environ['I3_BUILD'] + "offline_filterscripts/resources/scripts/pass3_reprocess_PFRaw.py"
+    icetray_version = "v1.13.0"
+    base_dir = "/cvmfs/icecube.opensciencegrid.org/py3-v4.4.0/RHEL_9_x86_64_v3"
+    envshell_loc = f"{base_dir}/metaprojects/icetray/{icetray_version}/bin/icetray-shell"
+    scriptloc = f"{base_dir}/metaprojects/icetray/{icetray_version}/share/icetray/offline_filterscripts/resources/scripts/pass3_reprocess_PFRaw.py"
     command = envshell_loc + " python3 " + scriptloc + f" -i {infile} -g {gcd} -o {outfile} --qify" 
     return command
 
 def generate_moni_command(infile: Path, gcd: Path, outfile: Path) -> str:
-    envshell_loc = "/cvmfs/icecube.opensciencegrid.org/py3-v4.4.0/RHEL_9_x86_64_v2/metaprojects/icetray/v1.13.0/bin/icetray-shell"
-    scriptloc = os.environ['I3_BUILD'] + "offline_filterscripts/resources/scripts/pass3_check_charge_filter.py"
+    icetray_version = "v1.13.0"
+    base_dir = "/cvmfs/icecube.opensciencegrid.org/py3-v4.4.0/RHEL_9_x86_64_v3"
+    envshell_loc = f"{base_dir}/metaprojects/icetray/{icetray_version}/bin/icetray-shell"
+    scriptloc = f"{base_dir}/metaprojects/icetray/{icetray_version}/share/icetray/offline_filterscripts/resources/scripts/pass3_check_charge_filter.py"
     command = envshell_loc + " python3 " + scriptloc + f" -i {infile} -g {gcd} -o {outfile}"
     return command
 
@@ -76,6 +82,34 @@ def get_sha512sum(filename: Union[str, Path]) -> str:
             h.update(mv[:n])
     return h.hexdigest()
 
+def prepare_inputs(outdir: Path, bundle: Path, checksum: str, gcddir: Path):
+    if not outdir.exists():
+        outdir.mkdir(parents=True, exist_ok=True)
+
+    if not (outdir / bundle.name).exists():
+        subprocess.run(f"scp {os.environ['ARCHIVER']}:{bundle} {str(outdir) + '/'}", shell=True)
+        bundle_sha512sum = get_sha512sum(outdir / bundle.name)
+        if bundle_sha512sum != checksum:
+            raise Exception(f"Bundle {bundle} checksum is not the same")
+
+    scratch_bundle_loc = outdir / bundle.name
+
+    infiles = [f for f in zipfile.ZipFile(scratch_bundle_loc).namelist()
+               if ".tar.gz" in f]
+
+    if len(infiles) == 0:
+        raise FileNotFoundError(
+            f"No input files found in bundle {args.bundle}")
+
+    inputs = [
+        (Path(gcddir),
+         Path(scratch_bundle_loc),
+         Path(f),
+         Path(outdir))
+         for f in infiles]
+
+    return inputs
+
 def runner(infiles: tuple[Path, Path, Path, Path]):
     # Creating a dir on the local disk
     tmpdir = Path(tempfile.mkdtemp(dir="/tmp"))
@@ -90,15 +124,18 @@ def runner(infiles: tuple[Path, Path, Path, Path]):
     if not gcd.exists():
         raise FileNotFoundError("No GCD")
 
+    shutil.copyfile(gcd, tmpdir / gcd.name)
+    local_gcd = tmpdir / gcd.name
+
     # Prepping files and file paths
     ## Extracting in file from bundle
-    zipfile.ZipFile(bundle).extract(infile, path=tmpdir)
+    zipfile.ZipFile(bundle).extract(str(infile), path=tmpdir)
     local_infile = tmpdir / infile
     if not local_infile.exists():
         raise FileNotFoundError("No Input File")
 
-    outfilename = get_outfilename(infile, outdir)
-    local_temp_outfile = tmpdir / "tmp_" + outfilename
+    outfilename = get_outfilename(infile)
+    local_temp_outfile = tmpdir / ("tmp_" + str(outfilename))
     local_outfile = tmpdir / outfilename
     outfile = outdir / outfilename
 
@@ -110,8 +147,8 @@ def runner(infiles: tuple[Path, Path, Path, Path]):
     stdout_file, stderr_file = get_logfilenames(infile,
                                                 outdir)
 
-    command = generate_command(local_infile, gcd, local_temp_outfile)
-    moni_command = generate_moni_command(local_temp_outfile, gcd, local_outfile)
+    command = generate_command(local_infile, local_gcd, local_temp_outfile)
+    moni_command = generate_moni_command(local_temp_outfile, local_gcd, local_outfile)
 
     # run step 1
     # We are first running the online processing that is the same as done 
@@ -141,7 +178,7 @@ def runner(infiles: tuple[Path, Path, Path, Path]):
     # create checksum of output file
     sha512sum = get_sha512sum(local_outfile)
     print(f"file: {local_outfile} sha512sum: {sha512sum}")
-    with open(outfile + ".sha512sum", "w"):
+    with Path.open(outfile + ".sha512sum", "w"):
         file.write(f"{sha512sum}")
 
     # Copying from local dir to absolute dir
@@ -158,6 +195,8 @@ def run_parallel(infiles, max_num=1):
     with concurrent.futures.ProcessPoolExecutor(
         max_workers = max_num) as executor:
         futures = executor.map(runner, infiles)
+        for f in futures:
+            print(future.result())
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -187,35 +226,13 @@ if __name__ == "__main__":
         numcpus = multiprocessing.cpu_count() 
     else:
         numcpus = args.maxnumcpus   
-    
-    if not args.outdir.exists():
-        Path(args.outdir).mkdir(parents=True, exist_ok=True)
 
-    if not (args.outdir / args.bundle.name).exists():
-        subprocess.run(f"scp {os.environ['$ARCHIVER']}:{args.bundle} {args.outdir}")
-        bundle_sha512sum = get_sha512sum(args.outdir / args.bundle.name)
-        if bundle_sha512sum != args.checksum:
-            raise Exception(f"Bundle {args.bundle} checksum is not the same")
+    inputs = prepare_inputs(args.outdir,
+                            args.bundle,
+                            args.checksum,
+                            args.gcddir)
 
-    scratch_bundle_loc = args.outdir / args.bundle.name
-
-    infiles = [f for f in zipfile.ZipFile(scratch_bundle_loc).namelist() 
-               if ".tar.gz" in f]
-    
-    if len(infiles) == 0:
-        raise FileNotFoundError(
-            f"No input files found in bundle {args.bundle}")
-    
-    inputs = [
-        (Path(args.gcddir), 
-         Path(scratch_bundle_loc), 
-         Path(f), 
-         Path(args.outdir)) 
-         for f in infiles]
-
-    print(inputs)
-         
-    # run_parallel(inputs, numcpus)
+    run_parallel(inputs, numcpus)
 
     # TODO: Delete bundle
     # shutil.rmtree(args.bundle)
