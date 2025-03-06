@@ -154,26 +154,30 @@ def runner(infiles: tuple[Path, Path, Path, Path]):
     # We are first running the online processing that is the same as done 
     # at the south pole. we then read the file back in, rehydrate it, and 
     # run some moni code on it to make sure we are doing the right thing.
-    with open(local_stdout_file, "w") as stdout, open(local_stderr_file, "w") as stderr:
-        # TODO: Do we need to check the GCD file?
-        stdout.write(
-                f"Start Time: {datetime.datetime.now(datetime.timezone.utc)}\n")
-        stdout.write(f"Hostname: {os.environ['HOSTNAME']}")
-        try:
-            subprocess.run(command, shell=True, stdout=stdout, stderr=stderr)
-        except:
-            raise Exception(
-                f"ALERT: {infile} in {bundle} has failed to process")
-        stdout.write(
-                f"End Time PFRAW: {datetime.datetime.now(datetime.timezone.utc)}\n")
-        try:
-            subprocess.run(
-                moni_command, shell=True, stdout=stdout, stderr=stderr)
-        except:
-            raise Exception(
-                f"ALERT: {infile} in {bundle} has failed during moni")
-        stdout.write(
-                f"End Time: {datetime.datetime.now(datetime.timezone.utc)}\n")
+    try:
+        with open(local_stdout_file, "w") as stdout, open(local_stderr_file, "w") as stderr:
+            # TODO: Do we need to check the GCD file?
+            stdout.write(
+                    f"Start Time: {datetime.datetime.now(datetime.timezone.utc)}\n")
+            stdout.write(f"Hostname: {os.environ['HOSTNAME']}")
+            try:
+                subprocess.run(command, shell=True, stdout=stdout, stderr=stderr)
+            except:
+                raise Exception(
+                    f"ALERT: {infile} in {bundle} has failed to process")
+            stdout.write(
+                    f"End Time PFRAW: {datetime.datetime.now(datetime.timezone.utc)}\n")
+            try:
+                subprocess.run(
+                    moni_command, shell=True, stdout=stdout, stderr=stderr)
+            except:
+                raise Exception(
+                    f"ALERT: {infile} in {bundle} has failed during moni")      
+            stdout.write(
+                    f"End Time: {datetime.datetime.now(datetime.timezone.utc)}\n")
+    finally:
+        shutil.copyfile(local_stdout_file, stdout_file)
+        shutil.copyfile(local_stderr_file, stderr_file)
 
     # create checksum of output file
     sha512sum = get_sha512sum(local_outfile)
@@ -182,8 +186,6 @@ def runner(infiles: tuple[Path, Path, Path, Path]):
         file.write(f"{sha512sum}")
 
     # Copying from local dir to absolute dir
-    shutil.copyfile(local_stdout_file, stdout_file)
-    shutil.copyfile(local_stderr_file, stderr_file)
     shutil.copyfile(local_outfile, outfile)
     # TODO: move charge and filter rate file
     shutil.copyfile(local_outfile + ".npz", outfile + ".npz",)
