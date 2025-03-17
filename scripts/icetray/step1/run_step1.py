@@ -57,7 +57,7 @@ def generate_command(infile: Path, gcd: Path, outfile: Path) -> str:
     icetray_version = "v1.13.0"
     base_dir = "/cvmfs/icecube.opensciencegrid.org/py3-v4.4.0/RHEL_9_x86_64_v3"
     envshell_loc = f"{base_dir}/metaprojects/icetray/{icetray_version}/bin/icetray-shell"
-    scriptloc = f"{base_dir}/metaprojects/icetray/{icetray_version}/share/icetray/offline_filterscripts/resources/scripts/pass3_reprocess_PFRaw.py"
+    scriptloc = f"{base_dir}/pass3/scripts/icetray/step1/pass3_reprocess_PFRaw.py"
     command = envshell_loc + " python3 " + scriptloc + f" -i {infile} -g {gcd} -o {outfile} --qify" 
     return command
 
@@ -65,7 +65,7 @@ def generate_moni_command(infile: Path, gcd: Path, outfile: Path) -> str:
     icetray_version = "v1.13.0"
     base_dir = "/cvmfs/icecube.opensciencegrid.org/py3-v4.4.0/RHEL_9_x86_64_v3"
     envshell_loc = f"{base_dir}/metaprojects/icetray/{icetray_version}/bin/icetray-shell"
-    scriptloc = f"{base_dir}/metaprojects/icetray/{icetray_version}/share/icetray/offline_filterscripts/resources/scripts/pass3_check_charge_filter.py"
+    scriptloc = f"{base_dir}/pass3/scripts/icetray/step1/pass3_check_charge_filter.py"
     command = envshell_loc + " python3 " + scriptloc + f" -i {infile} -g {gcd} -o {outfile}"
     return command
 
