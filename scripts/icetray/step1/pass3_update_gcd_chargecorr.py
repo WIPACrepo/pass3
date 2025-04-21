@@ -19,7 +19,7 @@ from icecube.offline_filterscripts.gcd_generation import get_nan_doms, run_gcd_a
 icetray.logging.console()
 
 if len(sys.argv) !=5:
-    icetray.logging.log_error("pass3_update_gcd_chargecorr.py <ingcd> <outgcd>")
+    icetray.logging.log_error(f"{sys.argv[0]} <ingcd> <outgcd> <ingcd_audit> <outgcd_audit>")
     sys.exit(0)
 
 infile = sys.argv[1]
@@ -31,16 +31,16 @@ icetray.logging.log_warn(f"Fixing GCD input file for Pass3: {infile}")
 icetray.logging.log_warn(f"Writing GCD: {outfile} ")
 
 icetray.logging.set_level("INFO")
-
-# GCD audit
+# Input GCD file audit
 icetray.logging.rotating_files(infile_audit)
 run_gcd_audit_pass3(infile)
 
-# Get the list of doms that have a warning message from GCD audit for invalid mean charge value.
+# Get the list of doms that have a warning message from GCD audit for invalid mean charge correction value.
 # Such a dom therefore has no other audit error so the nan came from a failed fit.
 atwd, fadc = get_nan_doms(infile_audit)
-icetray.logging.log_info(f"atwd {atwd}")
-icetray.logging.log_info(f"fadc {fadc}")
+icetray.logging.console()
+icetray.logging.log_info(f"len(atwd) {len(atwd)} atwd {atwd}")
+icetray.logging.log_info(f"len(fadc) {len(fadc)} fadc {fadc}")
 
 gcdfile_in = dataio.I3File(infile)
 
@@ -56,12 +56,10 @@ while gcdfile_in.more():
         cal_o = calitem.dom_cal  # type: ignore[attr-defined]
         for key, item in cal_o.items():
             old_atdw_cal.append(item.mean_atwd_charge)
-            #if not math.isnan(item.mean_atwd_charge):
             # Keep nan value for dom with audit warning
             if key in atwd or not math.isnan(item.mean_atwd_charge):
                 item.mean_atwd_charge = 1.0
             old_fadc_cal.append(item.mean_fadc_charge)
-            #if not math.isnan(item.mean_fadc_charge):
             # Keep nan value for dom with audit warning
             if key in fadc or not math.isnan(item.mean_fadc_charge):
                 item.mean_fadc_charge = 1.0
@@ -74,9 +72,12 @@ while gcdfile_in.more():
 gcdfile_in.close()
 gcdfile_out.close()
 
-# GCD audit
+# Output GCD file audit
 icetray.logging.rotating_files(outfile_audit)
 run_gcd_audit_pass3(outfile)
-#out_atwd, out_fadc = get_nan_doms(outfile_audit)
-#icetray.logging.log_info("out_atwd %", out_atwd)
-#icetray.logging.log_info("out_fadc %", out_fadc)
+out_atwd, out_fadc = get_nan_doms(outfile_audit)
+icetray.logging.log_info(f"len(out_atwd) {len(out_atwd)} out_atwd {out_atwd}")
+icetray.logging.log_info(f"len(out_fadc) {len(out_fadc)} out_fadc {out_fadc}")
+if len(out_atwd) or len(out_fadc):
+    icetray.logging.log_error(f"Expected no warning messages in GCD audit for DOMs with invalid charge correction")
+    sys.exit(1)
