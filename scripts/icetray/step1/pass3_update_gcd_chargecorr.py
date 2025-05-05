@@ -1,4 +1,4 @@
-"""Update GCD for pass3 processing, including
+"""Update GCD for pass3 step 1 processing, including
 
 * Run audit for pass3 on input GCD file, written to file <ingcd_audit>
 * Parse warning messages in audit to get DOMs with nan value for ATWD or FADC charge corrections.
@@ -56,11 +56,11 @@ while gcdfile_in.more():
         cal_o = calitem.dom_cal  # type: ignore[attr-defined]
         for key, item in cal_o.items():
             old_atdw_cal.append(item.mean_atwd_charge)
-            # Keep nan value for dom with audit warning
+            # Change nan value for dom with audit warning
             if key in atwd or not math.isnan(item.mean_atwd_charge):
                 item.mean_atwd_charge = 1.0
             old_fadc_cal.append(item.mean_fadc_charge)
-            # Keep nan value for dom with audit warning
+            # Change nan value for dom with audit warning
             if key in fadc or not math.isnan(item.mean_fadc_charge):
                 item.mean_fadc_charge = 1.0
             cal_o[key] = item
