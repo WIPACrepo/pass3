@@ -1,11 +1,8 @@
 import argparse
 import subprocess
 import hashlib
-import time
 import datetime
-import sys
 import os
-import multiprocessing
 import zipfile
 import shutil
 import tempfile
@@ -46,10 +43,10 @@ def get_logfilenames(infile: Path, outdir: Path) -> tuple[Path, Path]:
     # PFRaw_PhysicsFiltering_Run<RunNumber>_Subrun<SubRunNumber>_<FileNumber>.tar.gz
     infilename = str(remove_extension(infile))
     infilenwords = infilename.split('_')
-    stdoutfilename = "_".join([
-        "LOG", "OUT","Pass3", "Step1"] + infilenwords[1:]) + ".out"
+    stdoutfilename = "_".join(
+        ["LOG", "OUT", "Pass3", "Step1"] + infilenwords[1:]) + ".out"
     stderrfilename = "_".join(
-        ["LOG", "ERR","Pass3", "Step1"] + infilenwords[1:]) + ".err"
+        ["LOG", "ERR", "Pass3", "Step1"] + infilenwords[1:]) + ".err"
     return outdir / stdoutfilename, outdir / stderrfilename
 
 def generate_command(infile: Path, gcd: Path, outfile: Path) -> str:
@@ -198,7 +195,8 @@ def run_parallel(infiles, max_num=1):
         max_workers = max_num) as executor:
         futures = executor.map(runner, infiles)
         for f in futures:
-            print(future.result())
+            print(f.result())
+    return futures
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -225,9 +223,9 @@ if __name__ == "__main__":
     args=parser.parse_args()
 
     if args.maxnumcpus == 0:
-        numcpus = multiprocessing.cpu_count() 
+        numcpus =  None
     else:
-        numcpus = args.maxnumcpus   
+        numcpus = args.maxnumcpus
 
     inputs = prepare_inputs(args.outdir,
                             args.bundle,
