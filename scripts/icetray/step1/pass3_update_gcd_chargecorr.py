@@ -58,7 +58,7 @@ while gcdfile_in.more():
         geo_o = geo.omgeo
         for key, item in cal_o.items():
             # Consider only InIce DOMs
-            if geo.omgeo[key].omtype == dataclasses.I3OMGeo.IceCube:
+            if key in geo.omgeo and geo.omgeo[key].omtype == dataclasses.I3OMGeo.IceCube:
                 old_atdw_cal.append(item.mean_atwd_charge)
                 # Change nan value for dom with audit error
                 if key in atwd or not math.isnan(item.mean_atwd_charge):
