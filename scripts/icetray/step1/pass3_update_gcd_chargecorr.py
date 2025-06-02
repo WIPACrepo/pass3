@@ -1,7 +1,7 @@
 """Update GCD for pass3 step 1 processing, including
 
 * Run audit for pass3 on input GCD file, written to file <ingcd_audit>
-* Parse warning messages in audit to get DOMs with nan value for ATWD or FADC charge corrections.
+* Parse error messages in audit to get DOMs with nan value for ATWD or FADC charge correction.
   These DOMs had no other audit error, so the correction will be set to 1 in output GCD file. 
 * Set SPE correction factors to 1.0 for ATWD and FADC charge corrections
 -- set domcal.mean_atwd_charge = 1.0
