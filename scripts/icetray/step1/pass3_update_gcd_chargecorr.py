@@ -31,11 +31,11 @@ icetray.logging.log_warn(f"Fixing GCD input file for Pass3: {infile}")
 icetray.logging.log_warn(f"Writing GCD: {outfile} ")
 
 icetray.logging.set_level("INFO")
-# Input GCD file audit
+# Input GCD file audit, look for DOMs with nan error
 icetray.logging.rotating_files(infile_audit)
-run_gcd_audit_pass3(infile)
+rc = run_gcd_audit_pass3(infile, nan_error = True, not1_error = False)
 
-# Get the list of doms that have a warning message from GCD audit for invalid mean charge correction value.
+# Get the list of doms that have an error message from GCD audit for invalid mean charge correction value.
 # Such a dom therefore has no other audit error so the nan came from a failed fit.
 atwd, fadc = get_nan_doms(infile_audit)
 icetray.logging.console()
@@ -54,16 +54,20 @@ while gcdfile_in.more():
     if frame.Stop == icetray.I3Frame.Calibration:  # Got the calibration
         calitem = frame["I3Calibration"]
         cal_o = calitem.dom_cal  # type: ignore[attr-defined]
+        geo = frame["I3Geometry"]
+        geo_o = geo.omgeo
         for key, item in cal_o.items():
-            old_atdw_cal.append(item.mean_atwd_charge)
-            # Change nan value for dom with audit warning
-            if key in atwd or not math.isnan(item.mean_atwd_charge):
-                item.mean_atwd_charge = 1.0
-            old_fadc_cal.append(item.mean_fadc_charge)
-            # Change nan value for dom with audit warning
-            if key in fadc or not math.isnan(item.mean_fadc_charge):
-                item.mean_fadc_charge = 1.0
-            cal_o[key] = item
+            # Consider only InIce DOMs
+            if geo.omgeo[key].omtype == dataclasses.I3OMGeo.IceCube:
+                old_atdw_cal.append(item.mean_atwd_charge)
+                # Change nan value for dom with audit error
+                if key in atwd or not math.isnan(item.mean_atwd_charge):
+                    item.mean_atwd_charge = 1.0
+                old_fadc_cal.append(item.mean_fadc_charge)
+                # Change nan value for dom with audit error
+                if key in fadc or not math.isnan(item.mean_fadc_charge):
+                    item.mean_fadc_charge = 1.0
+                cal_o[key] = item
         calitem.dom_cal = cal_o  # type: ignore[attr-defined]
         frame.Delete("I3Calibration")
         frame["I3Calibration"] = calitem
@@ -78,12 +82,15 @@ while gcdfile_in.more():
 gcdfile_in.close()
 gcdfile_out.close()
 
-# Output GCD file audit
+# Output GCD file audit, also look for DOMs with charge correction not = 1
 icetray.logging.rotating_files(outfile_audit)
-run_gcd_audit_pass3(outfile)
+rc = run_gcd_audit_pass3(outfile, nan_error = True, not1_error = True)
+if not rc == 0:
+    icetray.logging.log_error(f"Unexpected error {rc} running GCD audit for file {outfile}")
+    sys.exit(2)
 out_atwd, out_fadc = get_nan_doms(outfile_audit)
 icetray.logging.log_info(f"len(out_atwd) {len(out_atwd)} out_atwd {out_atwd}")
 icetray.logging.log_info(f"len(out_fadc) {len(out_fadc)} out_fadc {out_fadc}")
 if len(out_atwd) or len(out_fadc):
-    icetray.logging.log_error(f"Expected no warning messages in GCD audit for DOMs with invalid charge correction")
+    icetray.logging.log_error("Expected no error messages in GCD audit for DOMs with invalid charge correction")
     sys.exit(1)
