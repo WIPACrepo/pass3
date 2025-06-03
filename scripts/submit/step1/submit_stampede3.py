@@ -31,16 +31,16 @@ def write_srun_multiprog(file: str,
     with Path.open(file, "w") as f:
         for i, (bundle, checksum) in enumerate(bundles.items()):
             f.write(
-                f"{i} apptainer run -B /home1/04799/tg840985/pass3:/opt/pass3{apptainer_container} {script} --bundle {bundle} --gcddir {gcddir} --outdir {outdir} --checksum {checksum}\n")
+                f"{i} apptainer run -B /home1/04799/tg840985/pass3:/opt/pass3 {apptainer_container} {script} --bundle {bundle} --gcddir {gcddir} --outdir {outdir} --checksum {checksum}\n")
 
 def read_checksum_file(file_path: Path,
                        year: int) -> dict:
     checksums = defaultdict(Path)
     with Path.open(file_path, "r") as f:
-        while line := file.readline():
+        while line := f.readline():
             line = line.rstrip()
             # Assuming each line is formatted (<sha512sum> <file_path>) and the values are separated by a space
-            checksum, archive_path = line.split(" ")
+            checksum, archive_path = line.split()
             if str(year) in archive_path:
                 checksums[Path(archive_path)] = checksum
     return checksums
@@ -74,7 +74,7 @@ if __name__ == "__main__":
     parser.add_argument("--multiprogfile",
                         help="path of multiprogfilr to write",
                         type=Path,
-                        required=True
+                        required=True,
                         default=Path("/home1/04799/tg840985/test.multiprog"))
     parser.add_argument("--month",
                         help="month to process",
@@ -82,7 +82,7 @@ if __name__ == "__main__":
                         required=False)
     args=parser.parse_args()
 
-    checksums = read_checksum_file(args.checksum_file, args.year, args.month)
+    checksums = read_checksum_file(args.checksum_file, args.year)
 
     write_srun_multiprog(args.multiprogfile,
                          checksums,
@@ -94,5 +94,5 @@ if __name__ == "__main__":
                     "skx",
                     "Test",
                     32,
-                    multiprogfile)
+                    args.multiprogfile)
 
