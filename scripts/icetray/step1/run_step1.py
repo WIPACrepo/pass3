@@ -49,21 +49,11 @@ def get_logfilenames(infile: Path, outdir: Path) -> tuple[Path, Path]:
         ["LOG", "ERR", "Pass3", "Step1"] + infilenwords[1:]) + ".err"
     return outdir / stdoutfilename, outdir / stderrfilename
 
-def generate_command(infile: Path, gcd: Path, outfile: Path) -> str:
-    # TODO: Figure out if we can load the eval and env-shell in the container
-    icetray_version = "v1.13.0"
-    base_dir = "/cvmfs/icecube.opensciencegrid.org/py3-v4.4.0/RHEL_9_x86_64_v3"
-    envshell_loc = f"{base_dir}/metaprojects/icetray/{icetray_version}/bin/icetray-shell"
-    scriptloc = f"{base_dir}/pass3/scripts/icetray/step1/pass3_reprocess_PFRaw.py"
-    command = envshell_loc + " python3 " + scriptloc + f" -i {infile} -g {gcd} -o {outfile} --qify" 
-    return command
-
-def generate_moni_command(infile: Path, gcd: Path, outfile: Path) -> str:
-    icetray_version = "v1.13.0"
-    base_dir = "/cvmfs/icecube.opensciencegrid.org/py3-v4.4.0/RHEL_9_x86_64_v3"
-    envshell_loc = f"{base_dir}/metaprojects/icetray/{icetray_version}/bin/icetray-shell"
-    scriptloc = f"{base_dir}/pass3/scripts/icetray/step1/pass3_check_charge_filter.py"
-    command = envshell_loc + " python3 " + scriptloc + f" -i {infile} -g {gcd} -o {outfile}"
+def generate_command(scriptloc: Path,
+                     infile: Path,
+                     gcd: Path,
+                     outfile: Path) -> str:
+    command = "python3 " + scriptloc + f" -i {infile} -g {gcd} -o {outfile} --qify"
     return command
 
 # Taken from LTA
@@ -144,8 +134,16 @@ def runner(infiles: tuple[Path, Path, Path, Path]):
     stdout_file, stderr_file = get_logfilenames(infile,
                                                 outdir)
 
-    command = generate_command(local_infile, local_gcd, local_temp_outfile)
-    moni_command = generate_moni_command(local_temp_outfile, local_gcd, local_outfile)
+    command = generate_command(
+        Path("/opt/pass3/scripts/icetray/step1/pass3_reprocess_PFRaw.py"),
+        local_infile,
+        local_gcd,
+        local_temp_outfile)
+    moni_command = generate_command(
+        Path("/opt/pass3/scripts/icetray/step1/pass3_check_charge_filter.py"),
+        local_temp_outfile,
+        local_gcd,
+        local_outfile)
 
     # run step 1
     # We are first running the online processing that is the same as done 
@@ -200,15 +198,15 @@ def run_parallel(infiles, max_num=1):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--gcddir', 
-                        help="GCD File", 
-                        type=Path, 
+    parser.add_argument('--gcddir',
+                        help="Directory with GCD files",
+                        type=Path,
                         required=True)
-    parser.add_argument("--bundle", 
+    parser.add_argument("--bundle",
                         help="path to bundle on ranch", 
                         type=Path,
                         required=True)
-    parser.add_argument("--outdir", 
+    parser.add_argument("--outdir",
                         help="",
                         type=Path,
                         required=True)
@@ -216,7 +214,7 @@ if __name__ == "__main__":
                         help="bundle sha512sum",
                         type=str,
                         required=True)
-    parser.add_argument("--maxnumcpus", 
+    parser.add_argument("--maxnumcpus",
                         help="",
                         type=int,
                         default=0)

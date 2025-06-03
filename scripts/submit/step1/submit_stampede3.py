@@ -25,14 +25,16 @@ def write_srun_multiprog(file: str,
                          bundles: defaultdict[Path],
                          outdir: Path,
                          gcddir: Path,
-                         script: Path,
+                         apptainer_container: Path,
+                         script: Path = Path("/opt/pass3/scripts/icetray/step1/run_step1.py"),
                          ) -> NoReturn:
-    script="/opt/pass3/scripts/icetray/step1/run_step1.py"
-    for i, (bundle, checksum) in enumerate(bundles.items()):
-        file.write(
-            f"{i} apptainer exec run pass3step1.sif {script} --bundle {bundle} --gcddir {gcddir} --outdir {outdir} --checksum {checksum}\n")
+    with Path.open(file, "w") as f:
+        for i, (bundle, checksum) in enumerate(bundles.items()):
+            f.write(
+                f"{i} apptainer run -B /home1/04799/tg840985/pass3:/opt/pass3{apptainer_container} {script} --bundle {bundle} --gcddir {gcddir} --outdir {outdir} --checksum {checksum}\n")
 
-def read_checksum_file(file_path: Path, year: int) -> dict:
+def read_checksum_file(file_path: Path,
+                       year: int) -> dict:
     checksums = defaultdict(Path)
     with Path.open(file_path, "r") as f:
         while line := file.readline():
@@ -48,13 +50,49 @@ if __name__ == "__main__":
     parser.add_argument("--checksum-file",
                         help="checksum file",
                         type=Path,
-                        required=True
-                        )
+                        required=True)
     parser.add_argument("--year",
                         help="year to process",
                         type=int,
                         required=True)
+    parser.add_argument("--gcddir",
+                        help="Directory with GCD files",
+                        type=Path, 
+                        required=True)
+    parser.add_argument("--outdir",
+                        help="output directory",
+                        type=Path,
+                        required=True)
+    parser.add_argument("--container",
+                        help="container to run in",
+                        type=Path,
+                        required=True)
+    parser.add_argument("--submitfile",
+                        help="Path of submit file to write",
+                        type=Path,
+                        required=True)
+    parser.add_argument("--multiprogfile",
+                        help="path of multiprogfilr to write",
+                        type=Path,
+                        required=True
+                        default=Path("/home1/04799/tg840985/test.multiprog"))
+    parser.add_argument("--month",
+                        help="month to process",
+                        type=int,
+                        required=False)
     args=parser.parse_args()
 
-    checksums = read_checksum_file(args.checksum_file, args.year)
+    checksums = read_checksum_file(args.checksum_file, args.year, args.month)
+
+    write_srun_multiprog(args.multiprogfile,
+                         checksums,
+                         args.outdir,
+                         args.gcddir,
+                         args.container)
+
+    write_slurm_file(args.submitfile,
+                    "skx",
+                    "Test",
+                    32,
+                    multiprogfile)
 
