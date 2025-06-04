@@ -1,0 +1,23 @@
+executable = /data/user/i3filter/IC86_OfflineProcessing/OfflineSubmitScripts_pass3step1gcd_test/pass3_step1_gcd.8.sh
+initialdir = /data/user/i3filter/IC86_OfflineProcessing/OfflineSubmitScripts_pass3step1gcd_test
+
+request_memory = 7000
+
+should_transfer_files = YES
+
+log    = /scratch/i3filter/pass3step1gcd_test/$Fn(Item).$(Cluster).$(Process).condor.log
+
+#notification = Error
+notify_user = rsnihur@icecube.wisc.edu
+
+arguments = $(Item)
+
+output = /scratch/i3filter/pass3step1gcd_test/$Fn(Item).$(Cluster).$(Process).condor.out
+error  = /scratch/i3filter/pass3step1gcd_test/$Fn(Item).$(Cluster).$(Process).condor.err
+
+# 12 jobs
+#queue Item matching /data/ana/IceCube/2022/filtered/level2pass2b/010[1-4]/Run00??????/*_GCD.i3.zst
+# 9 jobs
+#queue Item matching /data/exp/IceCube/2024/filtered/dev/off.3/0403/Run00??????/*_GCD.i3.zst
+# 12294 + 4695 + 1388 = 18377 jobs
+queue Item matching /data/ana/IceCube/201?/filtered/level2pass2b/????/Run00??????/*_GCD.i3.zst /data/ana/IceCube/202?/filtered/level2pass2b/????/Run00??????/*_GCD.i3.zst /data/exp/IceCube/202[3-4]/filtered/dev/off.3/????/Run00??????/*_GCD.i3.zst
