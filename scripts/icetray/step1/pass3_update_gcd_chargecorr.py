@@ -73,7 +73,7 @@ while gcdfile_in.more():
         frame["I3Calibration"] = calitem
 
     elif frame.Stop == icetray.I3Frame.DetectorStatus:    
-        bdl = "BadDomsListSLC"
+        bdl = "BadDomsList"
         if bdl in frame:
             icetray.logging.log_info(f"len({bdl}) {len(frame[bdl])} {bdl} {frame[bdl]}")
 
