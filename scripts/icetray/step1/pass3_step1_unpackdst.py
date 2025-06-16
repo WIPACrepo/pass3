@@ -23,6 +23,9 @@ from icecube.phys_services.which_split import which_split
 from icecube.icetray import I3Units
 from icecube.offline_filterscripts.base_segments.icetop_pulse_extract import ExtractIceTopTankPulses
 
+from monitoring_extractors.pass3_charge_monitor import ChargeMonitorI3Module
+from monitoring_extractors.pass3_calc_filter_rate import FilterRateMonitorI3Module
+
 start_time = time.asctime()
 print('Started:', start_time)
 
@@ -225,9 +228,16 @@ my_garbage = ['QTriggerHierarchy'
 #tray.Add("Delete", "final_cleanup",
 #         keys=my_garbage)
 
+tray.Add(ChargeMonitorI3Module, "charge_histogram",
+         input_key = "InIceDSTPulses",
+         output_file_path = args.OUTPUT + ".npz")
+
+tray.Add(FilterRateMonitorI3Module, "filter_rates",
+         output_file = args.OUTPUT + ".txt")
+
 # Write the physics and DAQ frames
-tray.AddModule("I3Writer", "EventWriter", filename=args.OUTPUT,
-               Streams=[icetray.I3Frame.Physics, icetray.I3Frame.DAQ],)
+# tray.AddModule("I3Writer", "EventWriter", filename=args.OUTPUT,
+#                Streams=[icetray.I3Frame.Physics, icetray.I3Frame.DAQ],)
 #               DropOrphanStreams=[icetray.I3Frame.DAQ])
 
 if args.PRETTY:
