@@ -61,25 +61,6 @@ def write_srun_multiprog(file: Path,
             year = get_year_filepath(str(bundle))
             date = get_date_filepath(str(bundle))
             f.write(f"{i}  /opt/apps/tacc-apptainer/1.3.3/bin/apptainer  exec -B /home1/04799/tg840985/pass3:/opt/pass3 -B /work2 -B /scratch {apptainer_container} {env_shell} python3 {script} --bundle {bundle} --gcddir {gcddir} --outdir {outdir}/{year}/{date} --checksum {checksum} --scratchdir {scratchdir}\n")
-            # f.write(
-            #         f"{i}  /home1/04799/tg840985/pass3/scripts/submit/step1/run_step1.sh  {i} {str(file) + '.command'}\n")
-
-# def write_srun_secondary_command(file: Path,
-#                          bundles: defaultdict[Path],
-#                          increment: int,
-#                          outdir: Path,
-#                          gcddir: Path,
-#                          apptainer_container: Path,
-#                          script: Path = Path("/opt/pass3/scripts/icetray/step1/run_step1.py"),
-#                          env_shell: Path = Path("/cvmfs/icecube.opensciencegrid.org/py3-v4.4.1/RHEL_9_x86_64_v4/metaprojects/icetray/v1.14.0/bin/icetray-shell")
-#                          ) -> NoReturn:
-#     file = Path(str(file) + ".commands" + str(increment))
-#     with Path.open(file, "w") as f:
-#         for bundle, checksum in bundles.items():
-#             year = get_year_filepath(str(bundle))
-#             date = get_date_filepath(str(bundle))
-#             f.write(f"/opt/apps/tacc-apptainer/1.3.3/bin/apptainer exec -B /home1/04799/tg840985/pass3:/opt/pass3 -B /work2 -B /scratch {apptainer_container} {env_shell} python3 {script} --bundle {bundle} --gcddir {gcddir} --outdir {outdir}/{year}/{date} --checksum {checksum} --maxnumcpus $(($SLURM_CPUS_ON_NODE / 2))\n")
-
 
 def month_in_path(file_path: str,
                   month: int) -> bool:
