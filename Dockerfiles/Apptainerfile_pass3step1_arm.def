@@ -1,0 +1,25 @@
+Bootstrap: docker
+From: almalinux:9.5
+
+%files
+  /cvmfs/icecube.opensciencegrid.org/data/photon-tables/splines
+
+%post
+  export CPUS=100
+  export GH_TOKEN=<insert github token>
+  dnf -y install 'dnf-command(config-manager)'
+  dnf config-manager --set-enabled crb
+  dnf -y install epel-release
+  dnf -y update && dnf -y upgrade
+  dnf -y group install "Development Tools"
+  mkdir -p /cvmfs/icecube.opensciencegrid.org
+  mkdir /usr/local/cvmfs_src
+  cd /usr/local/cvmfs_src
+  git clone https://github.com/WIPACrepo/cvmfs.git --branch pass3 .
+  python3 spack/build_v2.py py3-v4.4.1 --dest /cvmfs/icecube.opensciencegrid.org --src icecube.opensciencegrid.org --spack-target aarch64
+  python3 spack/build_v2.py py3-v4.4.1-metaproject --dest /cvmfs/icecube.opensciencegrid.org --src icecube.opensciencegrid.org --spack-target aarch64
+  mkdir /opt/pass3
+
+%environment
+  eval `/cvmfs/icecube.opensciencegrid.org/py3-v4.4.1/setup.sh`
+
