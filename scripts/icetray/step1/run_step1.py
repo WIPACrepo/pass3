@@ -7,6 +7,7 @@ import zipfile
 import shutil
 import tempfile
 import time
+import random
 
 from pathlib import Path, PosixPath
 import concurrent.futures
@@ -74,25 +75,35 @@ def get_sha512sum(filename: Union[str, Path]) -> str:
     return h.hexdigest()
 
 def get_bundle(bundle: Path, outdir: Path, retry_attempts: int = 5):
+    print(f"Getting bundle {bundle.name}")
+    wait = random.randint(0, 7) * 600
     for a in range(retry_attempts):
         try:
-            subprocess.run(f"scp ranch.tacc.utexas.edu:{bundle} {str(outdir) + '/'}", shell=True)
+            # time.sleep(wait)
+            print(f"scp'ing bundle {bundle}: scp ranch.tacc.utexas.edu:{bundle} {str(outdir) + '/'}")
+            subprocess.run(f"rsync --partial ranch.tacc.utexas.edu:{bundle} {str(outdir) + '/'}", shell=True, check=True)
             print(f"Successfully retrieved bundle: {bundle}")
             break
         except subprocess.CalledProcessError as e:
             print(f"Retrieving bundled {bundle}  failed (attempt {a + 1}/{retry_attempts})")
-            print(f"Error output: {e.stderr.strip()}")
+            print(f"Error output: {e.stderr}")
             if a < (retry_attempts - 1):
                 print(f"Waiting 10 seconds")
                 time.sleep(10)
             else:
                 raise
 
+def get_run_number(file: str) -> int:
+    # Assuming Format of infile name is:
+    # PFRaw_PhysicsFiltering_Run<RunNumber>_Subrun<SubRunNumber>_<FileNumber>.tar.gz
+    return int(file.split('_')[2][3:])
+
 def prepare_inputs(outdir: Path,
                    scratchdir: Path,
                    bundle: Path,
                    checksum: str,
-                   gcddir: Path) -> list:
+                   gcddir: Path,
+                   grl: list[int]) -> list:
     if not outdir.exists():
         outdir.mkdir(parents=True, exist_ok=True)
 
@@ -100,7 +111,7 @@ def prepare_inputs(outdir: Path,
         # Checking if available bundle is good
         bundle_sha512sum = get_sha512sum(scratchdir / bundle.name)
         if bundle_sha512sum != checksum:
-            shutil.rmtree(scratchdir/ bundle.name)
+            shutil.rmtree(scratchdir / bundle.name)
             get_bundle(bundle, scratchdir)
             bundle_sha512sum = get_sha512sum(scratchdir / bundle.name)
             if bundle_sha512sum != checksum:
@@ -108,7 +119,6 @@ def prepare_inputs(outdir: Path,
                 raise Exception(f"Bundle {bundle} checksum is not what we expect. Something wrong with tape bundle???")
     else:
         # Getting bundle if it doesn't exist
-        print(f"Getting bundle {bundle.name}")
         get_bundle(bundle, scratchdir)
 
     scratch_bundle_loc = scratchdir / bundle.name
@@ -125,9 +135,18 @@ def prepare_inputs(outdir: Path,
          Path(scratch_bundle_loc),
          Path(f),
          Path(outdir))
-         for f in infiles]
+         for f in infiles
+         if get_run_number(f) in grl]
 
     return inputs
+
+def get_grl(grl_path: Path) -> list[int]:
+    grl = []
+    with Path.open(grl_path, "r") as f:
+        while line := f.readline():
+            grl.append(int(line.rstrip()))
+    return grl
+
 def runner(infiles: tuple[Path, Path, Path, Path]) -> str:
 
     print(shutil.disk_usage("/tmp"))
@@ -269,6 +288,10 @@ if __name__ == "__main__":
                         help="",
                         type=int,
                         default=0)
+    parser.add_argument("--grl",
+                        help="good run list",
+                        type=Path,
+                        required=True)
     args=parser.parse_args()
 
     if args.maxnumcpus == 0:
@@ -282,11 +305,14 @@ if __name__ == "__main__":
 
     print(f"CPU count: {numcpus}")
 
+    grl = get_grl(args.grl)
+
     inputs = prepare_inputs(args.outdir,
                             args.scratchdir,
                             args.bundle,
                             args.checksum,
-                            args.gcddir)
+                            args.gcddir,
+                            grl)
 
     run_parallel(inputs, numcpus)
 
