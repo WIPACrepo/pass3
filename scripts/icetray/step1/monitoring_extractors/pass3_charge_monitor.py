@@ -3,7 +3,7 @@ from icecube.icetray import I3ConditionalModule
 from icecube.production_histograms.histograms.histogram import Histogram
 from icecube.production_histograms.histogram_modules.histogram_module import HistogramModule
 
-import Path
+from pathlib import Path
 
 from collections import defaultdict
 
@@ -62,6 +62,7 @@ class ChargeMonitorI3Module(I3ConditionalModule):
     def DAQ(self, frame):
         """"Getting Q frames"""
         self.get_charges(frame)
+        self.PushFrame(frame)
 
     def Finish(self):
         hists = np.zeros((5160, 100))
