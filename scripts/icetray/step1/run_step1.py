@@ -325,7 +325,7 @@ if __name__ == "__main__":
                             args.bundle,
                             args.checksum,
                             args.gcddir,
-                            grl
+                            grl,
                             badfiles)
 
     run_parallel(inputs, numcpus)
