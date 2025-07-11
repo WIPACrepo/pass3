@@ -150,7 +150,7 @@ def get_grl(grl_path: Path) -> list[int]:
 
 def get_bad_files(bad_files_path: Path) -> list[str]:
     bad_files = []
-    with Path.open(grl_path, "r") as f:
+    with Path.open(bad_files_path, "r") as f:
         while line := f.readline():
             grl.append(line.rstrip())
     return bad_files
@@ -303,7 +303,7 @@ if __name__ == "__main__":
     parser.add_argument("--badfiles",
                         help="known bad files list",
                         type=Path,
-                        requried=True)
+                        required=True)
     args=parser.parse_args()
 
     if args.maxnumcpus == 0:
