@@ -47,6 +47,7 @@ class FilterRateMonitorI3Module(I3ConditionalModule):
                 if frame[self.filtermask_key][name].prescale_passed:
                     self.filter_cnt[name] += 1
         self.frame_cnt = +1
+        self.PushFrame(frame)
 
     def Finish(self):
         """"Aggregate info and write to txt file"""
