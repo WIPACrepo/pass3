@@ -67,6 +67,7 @@ def write_srun_multiprog(file: Path,
                          numcores: int,
                          grl: Path,
                          env_shell: Path,
+                         badfiles: Path,
                          script: Path = Path("/opt/pass3/scripts/icetray/step1/run_step1.py"),
                          ) -> NoReturn:
     file = file.parent / (file.name + str(increment))
@@ -83,7 +84,8 @@ def write_srun_multiprog(file: Path,
             f.write(f"-B /work2 -B /scratch {apptainer_container} {env_shell} ")
             f.write(f"python3 {script} --bundle {bundle} --gcddir {gcddir} ")
             f.write(f"--outdir {outdir}/{year}/{date} --checksum {checksum} ")
-            f.write(f"--scratchdir {scratchdir} --grl {grl}")
+            f.write(f"--scratchdir {scratchdir} --grl {grl} ")
+            f.write(f"--badfiles {badfiles}")
             if numcores != 0:
                 f.write(f" --maxnumcpus {numcores}")
             f.write(f"\n")
@@ -183,7 +185,11 @@ if __name__ == "__main__":
                         default="TG-PHY150040",
                         required=False)
     parser.add_argument("--grl",
-                        help="good run list",
+                        help="path to good run list",
+                        type=Path,
+                        required=True)
+    parser.add_argument("--badfiles",
+                        help="path to list of bad files",
                         type=Path,
                         required=True)
     parser.add_argument("--cpuarch",
@@ -211,7 +217,8 @@ if __name__ == "__main__":
             args.scratchdir,
             args.numcores,
             args.grl,
-            env_shell)
+            env_shell,
+            args.badfiles)
 
     write_slurm_file(args.submitfile,
                     args.slurmqueue,

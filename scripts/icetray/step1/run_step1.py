@@ -103,7 +103,8 @@ def prepare_inputs(outdir: Path,
                    bundle: Path,
                    checksum: str,
                    gcddir: Path,
-                   grl: list[int]) -> list:
+                   grl: list[int],
+                   bad_files: list[str]) -> list:
     if not outdir.exists():
         outdir.mkdir(parents=True, exist_ok=True)
 
@@ -136,7 +137,7 @@ def prepare_inputs(outdir: Path,
          Path(f),
          Path(outdir))
          for f in infiles
-         if get_run_number(f) in grl]
+         if (get_run_number(f) in grl) and (f not in bad_files)]
 
     return inputs
 
@@ -146,6 +147,13 @@ def get_grl(grl_path: Path) -> list[int]:
         while line := f.readline():
             grl.append(int(line.rstrip()))
     return grl
+
+def get_bad_files(bad_files_path: Path) -> list[str]:
+    bad_files = []
+    with Path.open(grl_path, "r") as f:
+        while line := f.readline():
+            grl.append(line.rstrip())
+    return bad_files
 
 def runner(infiles: tuple[Path, Path, Path, Path]) -> str:
 
@@ -292,6 +300,10 @@ if __name__ == "__main__":
                         help="good run list",
                         type=Path,
                         required=True)
+    parser.add_argument("--badfiles",
+                        help="known bad files list",
+                        type=Path,
+                        requried=True)
     args=parser.parse_args()
 
     if args.maxnumcpus == 0:
@@ -306,13 +318,15 @@ if __name__ == "__main__":
     print(f"CPU count: {numcpus}")
 
     grl = get_grl(args.grl)
+    badfiles = get_bad_files(args.badfiles)
 
     inputs = prepare_inputs(args.outdir,
                             args.scratchdir,
                             args.bundle,
                             args.checksum,
                             args.gcddir,
-                            grl)
+                            grl
+                            badfiles)
 
     run_parallel(inputs, numcpus)
 
