@@ -22,6 +22,7 @@ def write_slurm_file(file: Path,
                      allocation: str,
                      multiprogfile: Path,
                      multiprogfileincrements: int,
+                     premovedbundles: bool
                      ) -> NoReturn:
     if queue not in ["skx", "spr", "icx", "gg"]:
         raise Exception("Didn't select supported queue.")
@@ -44,7 +45,8 @@ def write_slurm_file(file: Path,
             f.write(f"if [ ! -e {multiprogfile_inc}.done ]; then\n")
             f.write(f"echo Starting {multiprogfile_inc}\n")
             f.write(f"echo `date`\n")
-            f.write(f"srun --nodes={numnodes} --ntasks-per-node=1 --exclusive --multi-prog {multiprogfile_inc}.rsync && {multiprogfile_inc}.rsync.done || touch {multiprogfile_inc}.rsync.failed\n")
+            if not premovedbundles:
+                f.write(f"srun --nodes={numnodes} --ntasks-per-node=1 --exclusive --multi-prog {multiprogfile_inc}.rsync && {multiprogfile_inc}.rsync.done || touch {multiprogfile_inc}.rsync.failed\n")
             f.write(f"srun --nodes={numnodes} --ntasks-per-node=1 --exclusive --multi-prog {multiprogfile_inc} && touch {multiprogfile_inc}.done || touch {multiprogfile_inc}.failed\n")
             f.write(f"fi\n")
             f.write(f"\n")
@@ -189,6 +191,9 @@ if __name__ == "__main__":
                         type=str,
                         default="x86_64_v4",
                         choices=["x86_64_v4", "aarch64"])
+    parser.add_argument("--bundlesready",
+                        help="whether bundles are already in tmp location",
+                        action="store_true")
     args=parser.parse_args()
 
     env_shell = Path(f"/cvmfs/icecube.opensciencegrid.org/py3-v4.4.1/RHEL_9_{args.cpuarch}/metaprojects/icetray/v1.15.2/bin/icetray-shell")
@@ -214,4 +219,5 @@ if __name__ == "__main__":
                     args.numnodes,
                     args.allocation,
                     args.multiprogfile,
-                    len(checksums))
+                    len(checksums),
+                    args.bundlesready)
