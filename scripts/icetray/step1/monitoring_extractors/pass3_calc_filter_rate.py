@@ -1,10 +1,10 @@
 """Utility to calculate filter rates from filtered output files."""
+from __future__ import annotations
 from icecube.icetray import I3ConditionalModule, I3Units
 
-from __future__ import annotations
 from collections import defaultdict
 
-import Path
+from pathlib import Path
 
 class FilterRateMonitorI3Module(I3ConditionalModule):
     """Getting filter rates"""
