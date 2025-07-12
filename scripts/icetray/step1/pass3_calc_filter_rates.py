@@ -3,7 +3,7 @@
 import argparse
 from typing import cast
 
-import Path
+from pathlib import Path
 
 from icecube import dataclasses, dataio, icetray  # noqa: F401
 
@@ -48,7 +48,7 @@ def get_rates(infiles: list[str], outfile: str):
     if time_l < 0:
         raise ValueError("Invalid time length, quitting")
 
-    with Path.pen(outfile, "w") as f:
+    with Path.open(outfile, "w") as f:
         print(f"Files cover: {time_l} sec.")
         f.write(f"Files cover: {time_l}  sec.\n")
         print(f"Overall frame rate: {frame_cnt / time_l}  Hz")
