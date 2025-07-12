@@ -2,6 +2,7 @@
 from icecube.icetray import I3ConditionalModule
 from icecube.production_histograms.histograms.histogram import Histogram
 from icecube.production_histograms.histogram_modules.histogram_module import HistogramModule
+from icecube import dataclasses
 
 from pathlib import Path
 
