@@ -34,8 +34,8 @@ def write_slurm_file(file: Path,
         f.write(f"#SBATCH -J {jobname}\n")
         f.write(f"#SBATCH -N {numnodes}\n")
         f.write(f"#SBATCH -n {numnodes}\n")
-        f.write(f"#SBATCH -o myjob.o.%j\n")
-        f.write(f"#SBATCH -e myjob.e.%j\n")
+        f.write(f"#SBATCH -o {jobname}.o.%j\n")
+        f.write(f"#SBATCH -e {jobname}.e.%j\n")
         # f.write(f"#SBATCH -A {numnodes}\n")
         f.write(f"\n")
         f.write(f"echo `date`\n")
@@ -231,7 +231,7 @@ if __name__ == "__main__":
 
     write_slurm_file(args.submitfile,
                     args.slurmqueue,
-                    "Test",
+                    str(args.submitfile),
                     args.numnodes,
                     args.allocation,
                     args.multiprogfile,
