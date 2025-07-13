@@ -68,6 +68,7 @@ def write_srun_multiprog(file: Path,
                          grl: Path,
                          env_shell: Path,
                          badfiles: Path,
+                         numnodes: int,
                          script: Path = Path("/opt/pass3/scripts/icetray/step1/run_step1.py"),
                          ) -> NoReturn:
     file = file.parent / (file.name + str(increment))
@@ -89,10 +90,17 @@ def write_srun_multiprog(file: Path,
             if numcores != 0:
                 f.write(f" --maxnumcpus {numcores}")
             f.write(f"\n")
+        # Below is to make srun multi-prog file happy
+        # you always need number of tasks = number of nodes
+        # else when parsing the multiprog file it will fail
+        if len(bundles) < numnodes:
+            for i in range(len(bundles), numnodes):
+                f.write(f"{i}  echo  \"extra tasks to make srun happy\"\n")
+
 
 def month_in_path(file_path: str,
                   month: int) -> bool:
-    "/stornext/ranch_01/ranch/projects/TG-PHY150040/data/exp/IceCube/2020/unbiased/PFRaw/0420/7202275ab7a111eb8013bedaff42a7c6.zip"
+    """Example path on Ranch: /stornext/ranch_01/ranch/projects/TG-PHY150040/data/exp/IceCube/2020/unbiased/PFRaw/0420/7202275ab7a111eb8013bedaff42a7c6.zip"""
     if str(month) in get_date_filepath(file_path)[0:2]:
         return True
     return False
@@ -218,7 +226,8 @@ if __name__ == "__main__":
             args.numcores,
             args.grl,
             env_shell,
-            args.badfiles)
+            args.badfiles,
+            args.numnodes)
 
     write_slurm_file(args.submitfile,
                     args.slurmqueue,
