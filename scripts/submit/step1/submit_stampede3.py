@@ -47,7 +47,7 @@ def write_slurm_file(file: Path,
             f.write(f"echo `date`\n")
             if not premovedbundles:
                 f.write(f"srun --nodes={numnodes} --ntasks-per-node=1 --exclusive --multi-prog {multiprogfile_inc}.rsync && {multiprogfile_inc}.rsync.done || touch {multiprogfile_inc}.rsync.failed\n")
-            f.write(f"srun --nodes={numnodes} --ntasks-per-node=1 --exclusive --multi-prog {multiprogfile_inc} && touch {multiprogfile_inc}.done || touch {multiprogfile_inc}.failed\n")
+            f.write(f"srun --nodes={numnodes} --ntasks-per-node=1 --exclusive --cpus-per-task=$SLURM_CPUS_ON_NODE --multi-prog {multiprogfile_inc} && touch {multiprogfile_inc}.done || touch {multiprogfile_inc}.failed\n")
             f.write(f"fi\n")
             f.write(f"\n")
 
