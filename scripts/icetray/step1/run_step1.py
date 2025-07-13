@@ -152,7 +152,8 @@ def get_bad_files(bad_files_path: Path) -> list[str]:
     bad_files = []
     with Path.open(bad_files_path, "r") as f:
         while line := f.readline():
-            grl.append(line.rstrip())
+            if line.startswith("#"): continue
+            bad_files.append(line.rstrip("\n"))
     return bad_files
 
 def runner(infiles: tuple[Path, Path, Path, Path]) -> str:
