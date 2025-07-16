@@ -1,5 +1,6 @@
 """Utility to calculate filter rates from filtered output files."""
 from icecube.icetray import I3ConditionalModule
+import math
 
 
 class CheckPass3GCDI3Module(I3ConditionalModule):
@@ -25,3 +26,5 @@ class CheckPass3GCDI3Module(I3ConditionalModule):
                 raise ValueError("mean ATWD charge is not 1")
             if item.mean_fadc_charge != 1.0:
                 raise ValueError("mean FADC charge is not 1")
+            if math.isnan(item.relative_dom_eff):
+                raise ValueError("relative DOM efficiency is nan")
