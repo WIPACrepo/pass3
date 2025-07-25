@@ -23,7 +23,7 @@ def get_gcd(infile: Path, gcddir: Path) -> Path:
         raise FileNotFoundError("No GCD dir")
     # Assuming Format of infile name is:
     # PFRaw_PhysicsFiltering_Run<RunNumber>_Subrun<SubRunNumber>_<FileNumber>.tar.gz
-    runnum = int(str(infile).split('_')[2][3:])
+    runnum = get_run_number(str(infile))
     gcdfiles = list(gcddir.glob(f"*{runnum}*"))
     if len(gcdfiles) > 1:
         raise Exception(f"Multiple GCD Files {gcdfiles}")
@@ -36,8 +36,12 @@ def get_outfilename(infile: Path) -> Path:
     # Assuming Format of infile name is:
     # PFRaw_PhysicsFiltering_Run<RunNumber>_Subrun<SubRunNumber>_<FileNumber>.tar.gz
     infilename = str(remove_extension(infile))
+    # ukey_<uuid>_PFRaw_PhysicsFiltering_Run<RunNumber>_Subrun<SubRunNumber>_<FileNumber>.tar.gz
     infilenwords = infilename.split('_')
-    outfilewords = ["Pass3", "Step1"] + infilenwords[1:]
+    if infilename.startswith("ukey"):
+        outfilewords = ["Pass3", "Step1"] + infilenwords[3:]
+    else:
+        outfilewords = ["Pass3", "Step1"] + infilenwords[1:]
     return "_".join(outfilewords) + ".i3.zst"
 
 def get_logfilenames(infile: Path, outdir: Path) -> tuple[Path, Path]:
@@ -95,12 +99,15 @@ def get_bundle(bundle: Path, outdir: Path, retry_attempts: int = 5):
 
 def get_run_number(file: str) -> int:
     # Assuming Format of infile name is:
-    if file.startswith("ukey"):
-        # ukey_<uuid>_PFRaw_PhysicsFiltering_Run<RunNumber>_Subrun<SubRunNumber>_<FileNumber>.tar.gz
-        return int(file.split('_')[4][3:])
-    else:
-        #PFRaw_PhysicsFiltering_Run<RunNumber>_Subrun<SubRunNumber>_<FileNumber>.tar.gz
-        return int(file.split('_')[2][3:])
+    try:
+        if file.startswith("ukey"):
+            # ukey_<uuid>_PFRaw_PhysicsFiltering_Run<RunNumber>_Subrun<SubRunNumber>_<FileNumber>.tar.gz
+            return int(file.split('_')[4][3:])
+        else:
+            #PFRaw_PhysicsFiltering_Run<RunNumber>_Subrun<SubRunNumber>_<FileNumber>.tar.gz
+            return int(file.split('_')[2][3:])
+    except:
+        raise ValueError(f"File {file} is causing issues when extracting run number")
 
 def prepare_inputs(outdir: Path,
                    scratchdir: Path,
