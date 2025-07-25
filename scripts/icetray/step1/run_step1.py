@@ -81,7 +81,7 @@ def get_bundle(bundle: Path, outdir: Path, retry_attempts: int = 5):
         try:
             # time.sleep(wait)
             print(f"scp'ing bundle {bundle}: scp ranch.tacc.utexas.edu:{bundle} {str(outdir) + '/'}")
-            subprocess.run(f"rsync --partial ranch.tacc.utexas.edu:{bundle} {str(outdir) + '/'}", shell=True, check=True)
+            subprocess.run(f"scp ranch.tacc.utexas.edu:{bundle} {str(outdir) + '/'}", shell=True, check=True)
             print(f"Successfully retrieved bundle: {bundle}")
             break
         except subprocess.CalledProcessError as e:
