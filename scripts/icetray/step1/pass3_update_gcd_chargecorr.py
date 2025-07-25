@@ -67,6 +67,8 @@ while gcdfile_in.more():
                 # Change nan value for dom with audit error
                 if key in fadc or not math.isnan(item.mean_fadc_charge):
                     item.mean_fadc_charge = 1.0
+                if math.isnan(item.relative_dom_eff):
+                    item.relative_dom_eff = 1.0
                 cal_o[key] = item
         calitem.dom_cal = cal_o  # type: ignore[attr-defined]
         frame.Delete("I3Calibration")

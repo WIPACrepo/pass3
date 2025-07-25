@@ -11,7 +11,7 @@ import random
 
 from pathlib import Path, PosixPath
 import concurrent.futures
-from typing import Union
+from typing import Union, NoReturn
 
 def remove_extension(path: Path) -> Path:
     """Remove multiple suffixes from filename"""
@@ -95,8 +95,12 @@ def get_bundle(bundle: Path, outdir: Path, retry_attempts: int = 5):
 
 def get_run_number(file: str) -> int:
     # Assuming Format of infile name is:
-    # PFRaw_PhysicsFiltering_Run<RunNumber>_Subrun<SubRunNumber>_<FileNumber>.tar.gz
-    return int(file.split('_')[2][3:])
+    if file.startswith("ukey"):
+        # ukey_<uuid>_PFRaw_PhysicsFiltering_Run<RunNumber>_Subrun<SubRunNumber>_<FileNumber>.tar.gz
+        return int(file.split('_')[4][3:])
+    else:
+        #PFRaw_PhysicsFiltering_Run<RunNumber>_Subrun<SubRunNumber>_<FileNumber>.tar.gz
+        return int(file.split('_')[2][3:])
 
 def prepare_inputs(outdir: Path,
                    scratchdir: Path,
@@ -155,6 +159,18 @@ def get_bad_files(bad_files_path: Path) -> list[str]:
             grl.append(line.rstrip())
     return bad_files
 
+def check_i3_file(infile: Path) -> bool:
+    print(f"Checking whether {infile} is a valid i3 file.")
+    try:
+        cmd = f"python3 os.environ['I3_BUILD']/dataio/resources/examples/scan.py -c {infile}"
+        subprocess.run(cmd, shell=True)
+    except:
+        print("Renaming broken i3 file")
+        os.rename(infile, str(infile) + ".bad")
+        return False
+    else:
+        return True
+
 def runner(infiles: tuple[Path, Path, Path, Path]) -> str:
 
     print(shutil.disk_usage("/tmp"))
@@ -190,6 +206,8 @@ def runner(infiles: tuple[Path, Path, Path, Path]) -> str:
     outfile = outdir / outfilename
 
     if outfile.exists():
+        if not check_i3_file(outfile):
+            print(f"Output file {outfile} is not a valid i3 file.")
         return f"Output file {outfile} already exists"
 
     local_stdout_file, local_stderr_file = get_logfilenames(infile,
@@ -250,9 +268,11 @@ def runner(infiles: tuple[Path, Path, Path, Path]) -> str:
 
     sha512sum_final = get_sha512sum(outfile)
     if sha512sum_final != sha512sum:
-        raise Exception(f"Copying file {local_outfile} from tmp storage to final storage failed.")
+        return f"ALERT: Copying file {local_outfile} from tmp storage to final storage {outfile} failed. sha512sum mismatch."
 
-    # TODO: move charge and filter rate file
+    if not check_i3_file(outfile):
+        return f"ALERT: Output file {outfile} is not a valid i3 file."
+
     print("Copying moni files")
     shutil.copyfile(str(local_outfile) + ".npz", str(outfile) + ".npz",)
     shutil.copyfile(str(local_outfile) + ".txt", str(outfile) + ".txt")
