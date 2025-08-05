@@ -24,13 +24,13 @@ printenv
 
 # Define driver scripts.
 
-ENV="/cvmfs/icecube.opensciencegrid.org/py3-v4.4.1/icetray-env"
+ENV="/cvmfs/icecube.opensciencegrid.org/py3-v4.4.2"
 echo "${0} ` eval ${DATE_NOW} ` ENV = ${ENV}"
 
-BASEDIR="/data/user/i3filter/rsnihur/icetray/p3-v4.4.1_RHEL_7_audit_gcd_20250603"
+BASEDIR="icetray/v1.15.3"
 echo "${0} ` eval ${DATE_NOW} ` BASEDIR = ${BASEDIR}"
 
-SCRIPT="/data/user/i3filter/IC86_OfflineProcessing/OfflineSubmitScripts_pass3step1gcd_test/pass3_update_gcd_chargecorr.32.py"
+SCRIPT="/data/user/i3filter/IC86_OfflineProcessing/OfflineSubmitScripts_pass3step1gcd/src/pass3/main/scripts/icetray/step1/pass3_update_gcd_chargecorr.py"
 echo "${0} ` eval ${DATE_NOW} ` SCRIPT = ${SCRIPT}"
 
 SCRATCH=$_CONDOR_SCRATCH_DIR
@@ -64,11 +64,11 @@ RUN=`echo ${INDIR} | awk -Fn '{print $NF}' | sed 's/^0*//'`
 echo "${0} ` eval ${DATE_NOW} ` RUN = ${RUN}"
 
 # Handle pass2b case
-OUTDIR="`echo ${INDIR} | sed s%/level2pass2b/%/OnlinePass3.5/% `"
+OUTDIR="`echo ${INDIR} | sed s%/level2pass2b/%/OnlinePass3.7/% `"
 echo "${0} ` eval ${DATE_NOW} ` OUTDIR = ${OUTDIR}"
 
 # Also handle new offline case
-OUTDIR="`echo ${OUTDIR} | sed s%/dev/off.3/%/OnlinePass3.5/% `"
+OUTDIR="`echo ${OUTDIR} | sed s%/dev/off.3/%/OnlinePass3.7/% `"
 echo "${0} ` eval ${DATE_NOW} ` OUTDIR = ${OUTDIR}"
 
 
@@ -238,7 +238,7 @@ echo "$0 ` eval ${DATE_NOW} ` ${CMD} STATUS = ${STATUS}"
 
 # Next section marks this run as started with timestamp in DB. Exit if this run is already in DB.
 
-PASS=`cat /data/user/i3filter/IC86_OfflineProcessing/OfflineSubmitScripts_pass3step1gcd_test/filter-db.config`
+PASS=`cat /home/i3filter/filter-db.config`
 
 mysql -N i3filter --host=filter-db --user=i3filter --password=${PASS} << EOF
 insert into onlinepass3_gcd_processing (run_id, path, done, date) values (${RUN}, "${INPUT}", 0, NOW());
@@ -255,7 +255,7 @@ fi
 
 # Main section
 
-CMD="${ENV} ${BASEDIR} python ${SCRIPT} ${INPUT} ${OUTTARGET} ${INAUDIT} ${OUTAUDIT}"
+CMD="${ENV}/icetray-env ${BASEDIR} python ${SCRIPT} ${INPUT} ${OUTTARGET} ${INAUDIT} ${OUTAUDIT}"
 echo ${CMD}
 
 # Append to output and error log files for this step.
@@ -272,10 +272,10 @@ fi
 
 # Validation section
 
-SCRIPT="${BASEDIR}/dataio/resources/examples/scan.py -c"
+SCRIPT="${ENV}/metaprojects/${BASEDIR}/dataio/resources/examples/scan.py -c"
 echo "${0} ` eval ${DATE_NOW} ` SCRIPT = ${SCRIPT}"
 
-CMD="${ENV} ${BASEDIR} ${SCRIPT} ${OUTPUT}"
+CMD="${ENV}/icetray-env ${BASEDIR} python ${SCRIPT} ${OUTPUT}"
 echo ${CMD}
 # NB append to BOTH output and error log files for this step.
 ${CMD} |& tee -a ${OUTLOG} ${ERRLOG}
