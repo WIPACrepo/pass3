@@ -4,8 +4,8 @@
 * Parse error messages in audit to get DOMs with nan value for ATWD or FADC charge correction.
   These DOMs had no other audit error, so the correction will be set to 1 in output GCD file. 
 * Set SPE correction factors to 1.0 for ATWD and FADC charge corrections
--- set domcal.mean_atwd_charge = 1.0
--- set domcal.mean_fadc_charge = 1.0
+-- set domcal.mean_atwd_charge_correction = 1.0
+-- set domcal.mean_fadc_charge_correction = 1.0
 * Run audit for pass3 on output GCD file, written to file <outgcd_audit>
 
 Usage:  python pass3_update_gcd_chargecorr.py <ingcd> <outgcd> <ingcd_audit> <outgcd_audit>
@@ -59,14 +59,14 @@ while gcdfile_in.more():
         for key, item in cal_o.items():
             # Consider only InIce DOMs
             if key in geo.omgeo and geo.omgeo[key].omtype == dataclasses.I3OMGeo.IceCube:
-                old_atdw_cal.append(item.mean_atwd_charge)
+                old_atdw_cal.append(item.mean_atwd_charge_correction)
                 # Change nan value for dom with audit error
-                if key in atwd or not math.isnan(item.mean_atwd_charge):
-                    item.mean_atwd_charge = 1.0
-                old_fadc_cal.append(item.mean_fadc_charge)
+                if key in atwd or not math.isnan(item.mean_atwd_charge_correction):
+                    item.mean_atwd_charge_correction = 1.0
+                old_fadc_cal.append(item.mean_fadc_charge_correction)
                 # Change nan value for dom with audit error
-                if key in fadc or not math.isnan(item.mean_fadc_charge):
-                    item.mean_fadc_charge = 1.0
+                if key in fadc or not math.isnan(item.mean_fadc_charge_correction):
+                    item.mean_fadc_charge_correction = 1.0
                 if math.isnan(item.relative_dom_eff):
                     item.relative_dom_eff = 1.0
                 cal_o[key] = item
