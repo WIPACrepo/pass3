@@ -3,7 +3,7 @@
 * Replace bad IceTop DOMCals with good IceTop DOMCals from a nearby run.
   This is something necessary for certain runs in IC86.2011
 
-Usage:  python pass3_update_gcd_chargecorr.py <ingcd> <stealfromgcd> <outgcd>
+Usage:  python pass3_update_gcd_icetopdomcal.py <ingcd> <stealfromgcd> <outgcd>
 
 HOW TO TEST IT:
 ----------------
@@ -81,58 +81,14 @@ class ReplaceIceTopDOMCals_fromOtherGCD(icetray.I3Module):
         frame["I3Calibration"] = calitem
         self.PushFrame(frame)
 
-'''
-## --------------------------------------------
-## ------ FILE HANDLING: ----------------------
-## --------------------------------------------
-## Catalog of the first runs of every calendar year:
-fr_calyear_map = {
-    2011: 117294, 2012: 119220, 2013: 121480, 2014: 123614, 2015: 125791,
-    2016: 127345, 2017: 129003, 2018: 130476, 2019: 131986, 2020: 133575,    
-    2021: 134850, 2022: 136124, 2023: 137496, 2024: 138808, 2025: 140310
-}
-
-import glob
-def find_level2_gcd(r, forgivemissing=True):
-    # Find the appropriate GCD files
-    # First, narrow it down by year.
-    calyear = 2010 
-    for y in sorted(fr_calyear_map.keys()):
-        if fr_calyear_map[y] <= r:  # Maybe it's this one!
-            calyear = y
-        else:  # We passed it
-            break
-    print("Found it in calendar year", calyear)
-
-    # Now search for it.
-    if r < 129523: # before the start of IC86.2017
-        pattern = "/data/exp/IceCube/%d/filtered/level2pass2a/*/Run00%d/*GCD*"%(calyear, r)
-    else:
-        pattern = "/data/exp/IceCube/%d/filtered/level2/*/Run00%d/*GCD*"%(calyear, r)
-    gcdlist = glob.glob(pattern)
-    # Make sure there's only one of them.
-    if len(gcdlist)>1:
-        print("Searched but too many: ", pattern)
-        #if forgivemissing:  # This one is unforgivable?
-        #    return None
-        #else:
-        raise Exception("Too many found.")
-    if len(gcdlist)==0:
-        print("Searched but missing: ", pattern)
-        if forgivemissing:
-            return None
-        else:
-            raise Exception("None found.")
-    return gcdlist[0]
-'''
 
 ## --------------------------------------------
 ## ------ SET INPUT AND OUTPUT: ---------------
 ## --------------------------------------------
 ## For testing
 '''
-infile = find_level2_gcd(119189, False)
-stealfile = find_level2_gcd(118175, False)
+infile = "/data/exp/IceCube/2011/filtered/level2pass2a/1227/Run00119189/Level2pass2_IC86.2011_data_Run00119189_1227_1_20_GCD.i3.zst" 
+stealfile = "/data/exp/IceCube/2011/filtered/level2pass2a/0513/Run00118175/Level2pass2_IC86.2011_data_Run00118175_0513_1_20_GCD.i3.zst"
 outfile = "testme_119183_GCD.i3.bz2"
 #domliststrs = ["1-61", "1-62", "1-63", "1-64"]  # some of them
 domliststrs = []  # all of them
@@ -153,9 +109,9 @@ stealfile = sys.argv[2]
 outfile = sys.argv[3]
 domliststrs = sys.argv[4:]  # the rest of them, as strings
 
-
-# Parse the list of DOM's input by the user as strings
+# Parse the list of DOM's input by the user as strings -> icetray OMKeys
 domlist = [icetray.OMKey(int(x.split("-")[0]),int(x.split("-")[1])) for x in domliststrs]
+
 
 ## --------------------------------------------
 ## ------ EXECUTE IT: -------------------------
@@ -185,8 +141,9 @@ tray.Add(ReplaceIceTopDOMCals_fromOtherGCD, "replacetest",
  
 # Write output
 icetray.i3logging.log_info("Writing to: %s"%outfile)
-streams = [icetray.I3Frame.Geometry, icetray.I3Frame.Calibration,
-           icetray.I3Frame.TrayInfo,
+streams = [icetray.I3Frame.TrayInfo, 
+           icetray.I3Frame.Geometry, 
+           icetray.I3Frame.Calibration,
            icetray.I3Frame.DetectorStatus]
 tray.Add("I3Writer", filename=outfile, Streams=streams)
 
