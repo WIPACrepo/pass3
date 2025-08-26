@@ -3,7 +3,7 @@
 * Replace bad IceTop DOMCals with good IceTop DOMCals from a nearby run.
   This is something necessary for certain runs in IC86.2011
 
-Usage:  python pass3_update_gcd_icetopdomcal.py <ingcd> <stealfromgcd> <outgcd>
+Usage:  python pass3_update_gcd_icetopdomcal.py <ingcd> <stealfromgcd> <outgcd> [particular DOM's, such as "1-61"... none = all of IceTop]
 
 HOW TO TEST IT:
 ----------------
