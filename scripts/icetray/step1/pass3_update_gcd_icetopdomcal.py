@@ -4,56 +4,17 @@
   This is something necessary for certain runs in IC86.2011
 
 Usage:  python pass3_update_gcd_chargecorr.py <ingcd> <stealfromgcd> <outgcd>
+
+HOW TO TEST IT:
+----------------
+python pass3_update_gcd_icetopdomcal.py /data/exp/IceCube/2011/filtered/level2pass2a/1227/Run00119189/Level2pass2_IC86.2011_data_Run00119189_1227_1_20_GCD.i3.zst /data/exp/IceCube/2011/filtered/level2pass2a/0513/Run00118175/Level2pass2_IC86.2011_data_Run00118175_0513_1_20_GCD.i3.zst testme_119183_GCD.i3.bz2 1-61 1-62 1-63 1-64
+
 """
 
 #import math
 import sys
 from icecube import icetray, dataclasses, dataio #NOQA: F401
 from icecube.offline_filterscripts.gcd_generation import get_nan_doms, run_gcd_audit_pass3
-
-
-## --------------------------------------------
-## ------ FILE HANDLING: ----------------------
-## --------------------------------------------
-## Catalog of the first runs of every calendar year:
-fr_calyear_map = {
-    2011: 117294, 2012: 119220, 2013: 121480, 2014: 123614, 2015: 125791,
-    2016: 127345, 2017: 129003, 2018: 130476, 2019: 131986, 2020: 133575,    
-    2021: 134850, 2022: 136124, 2023: 137496, 2024: 138808, 2025: 140310
-}
-
-import glob
-def find_level2_gcd(r, forgivemissing=True):
-    # Find the appropriate GCD files
-    # First, narrow it down by year.
-    calyear = 2010 
-    for y in sorted(fr_calyear_map.keys()):
-        if fr_calyear_map[y] <= r:  # Maybe it's this one!
-            calyear = y
-        else:  # We passed it
-            break
-    print("Found it in calendar year", calyear)
-
-    # Now search for it.
-    if r < 129523: # before the start of IC86.2017
-        pattern = "/data/exp/IceCube/%d/filtered/level2pass2a/*/Run00%d/*GCD*"%(calyear, r)
-    else:
-        pattern = "/data/exp/IceCube/%d/filtered/level2/*/Run00%d/*GCD*"%(calyear, r)
-    gcdlist = glob.glob(pattern)
-    # Make sure there's only one of them.
-    if len(gcdlist)>1:
-        print("Searched but too many: ", pattern)
-        #if forgivemissing:  # This one is unforgivable?
-        #    return None
-        #else:
-        raise Exception("Too many found.")
-    if len(gcdlist)==0:
-        print("Searched but missing: ", pattern)
-        if forgivemissing:
-            return None
-        else:
-            raise Exception("None found.")
-    return gcdlist[0]
 
 
 ## --------------------------------------------
@@ -68,7 +29,7 @@ class ReplaceIceTopDOMCals_fromOtherGCD(icetray.I3Module):
     def __init__(self, ctx):
         super().__init__(ctx)
         self.AddParameter('StealFromFile', 'GCD file containing good IceTop DOMCals to steal from', ""),
-        self.AddParameter('OMKeyList', 'List of OMKeys to steal', [])
+        self.AddParameter('OMKeyList', 'List of OMKeys to steal (empty = all of them)', [])
         self.AddOutBox('OutBox')
 
     def Configure(self):
@@ -120,25 +81,81 @@ class ReplaceIceTopDOMCals_fromOtherGCD(icetray.I3Module):
         frame["I3Calibration"] = calitem
         self.PushFrame(frame)
 
+'''
+## --------------------------------------------
+## ------ FILE HANDLING: ----------------------
+## --------------------------------------------
+## Catalog of the first runs of every calendar year:
+fr_calyear_map = {
+    2011: 117294, 2012: 119220, 2013: 121480, 2014: 123614, 2015: 125791,
+    2016: 127345, 2017: 129003, 2018: 130476, 2019: 131986, 2020: 133575,    
+    2021: 134850, 2022: 136124, 2023: 137496, 2024: 138808, 2025: 140310
+}
+
+import glob
+def find_level2_gcd(r, forgivemissing=True):
+    # Find the appropriate GCD files
+    # First, narrow it down by year.
+    calyear = 2010 
+    for y in sorted(fr_calyear_map.keys()):
+        if fr_calyear_map[y] <= r:  # Maybe it's this one!
+            calyear = y
+        else:  # We passed it
+            break
+    print("Found it in calendar year", calyear)
+
+    # Now search for it.
+    if r < 129523: # before the start of IC86.2017
+        pattern = "/data/exp/IceCube/%d/filtered/level2pass2a/*/Run00%d/*GCD*"%(calyear, r)
+    else:
+        pattern = "/data/exp/IceCube/%d/filtered/level2/*/Run00%d/*GCD*"%(calyear, r)
+    gcdlist = glob.glob(pattern)
+    # Make sure there's only one of them.
+    if len(gcdlist)>1:
+        print("Searched but too many: ", pattern)
+        #if forgivemissing:  # This one is unforgivable?
+        #    return None
+        #else:
+        raise Exception("Too many found.")
+    if len(gcdlist)==0:
+        print("Searched but missing: ", pattern)
+        if forgivemissing:
+            return None
+        else:
+            raise Exception("None found.")
+    return gcdlist[0]
+'''
 
 ## --------------------------------------------
 ## ------ SET INPUT AND OUTPUT: ---------------
 ## --------------------------------------------
 ## For testing
+'''
 infile = find_level2_gcd(119189, False)
 stealfile = find_level2_gcd(118175, False)
 outfile = "testme_119183_GCD.i3.bz2"
+#domliststrs = ["1-61", "1-62", "1-63", "1-64"]  # some of them
+domliststrs = []  # all of them
 
 '''
-if len(sys.argv) !=5:
-    icetray.logging.log_error(f"{sys.argv[0]} <ingcd> <outgcd> <ingcd_audit> <outgcd_audit>")
+
+## User arguments: 
+## -- Source GCD file
+## -- GCD file to steal from
+## -- Output GCD
+## -- (optional) List of OMKeys (default = all of them in IceTop) such as "7-61"
+if len(sys.argv) < 4:
+    icetray.logging.log_error(f"{sys.argv[0]} <ingcd> <stealgcd> <outgcd> [optional: particular DOMs, such as '1-61']")
     sys.exit(0)
 
 infile = sys.argv[1]
 stealfile = sys.argv[2]
 outfile = sys.argv[3]
-'''
+domliststrs = sys.argv[4:]  # the rest of them, as strings
 
+
+# Parse the list of DOM's input by the user as strings
+domlist = [icetray.OMKey(int(x.split("-")[0]),int(x.split("-")[1])) for x in domliststrs]
 
 ## --------------------------------------------
 ## ------ EXECUTE IT: -------------------------
@@ -164,8 +181,7 @@ tray.AddModule("I3Reader", "readme", Filename=infile)
 
 tray.Add(ReplaceIceTopDOMCals_fromOtherGCD, "replacetest",
          StealFromFile = stealfile,
-         OMKeyList = [icetray.OMKey(1,61), icetray.OMKey(1,63)])  # try one or two
-#         OMKeyList = [])  # try all of them
+         OMKeyList = domlist)
  
 # Write output
 icetray.i3logging.log_info("Writing to: %s"%outfile)
@@ -176,3 +192,4 @@ tray.Add("I3Writer", filename=outfile, Streams=streams)
 
 # Execute!
 tray.Execute()
+
