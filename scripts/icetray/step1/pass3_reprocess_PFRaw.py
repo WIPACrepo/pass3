@@ -205,6 +205,29 @@ def check_q_frame_keys(frame, keylist):
         if item not in keylist:
             icetray.logging.log_error(f"Unexpected key in output file: {item}")
 
+
+##############################
+#  ICETRAY PROCESSING BELOW  #
+##############################
+# add one second to event header to compensate for missed leap second adjustment
+# See internal report icecube/201812001
+leap_tmin = dataclasses.I3Time()
+leap_tmax = dataclasses.I3Time()
+leap_tmin.set_utc_cal_date(2012,6,30,3,24,03,0.)
+leap_tmax.set_utc_cal_date(2015,5,18,0,59,04,0.)
+
+
+def Fix_LeapSecond(frame, start_date=None, end_date=None):
+        header = frame['I3EventHeader']
+
+        if (header.start_time >= start_date and header.start_time < end_date):
+            header.end_time += I3Units.second
+            header.start_time += I3Units.second
+            del frame['I3EventHeader']
+            frame['I3EventHeader'] = header
+        return True
+
+
 # Write the physics and DAQ frames
 tray.AddModule("I3Writer", "EventWriter", filename=args.OUTPUT,
                    Streams=[icetray.I3Frame.DAQ,
