@@ -23,6 +23,8 @@ Example:  python pass3_process_PFRaw --qify -g PFGCD_Run00137496_Subrun00000000_
 import os
 import sys
 import time
+import copy
+
 from argparse import ArgumentParser
 
 from icecube import dataio, icetray
@@ -210,22 +212,27 @@ def check_q_frame_keys(frame, keylist):
 #  ICETRAY PROCESSING BELOW  #
 ##############################
 # add one second to event header to compensate for missed leap second adjustment
-# See internal report icecube/201812001
+# https://internal-apps.icecube.wisc.edu/reports/data/icecube/2018/12/001/icecube_201812001_v1.pdf
 leap_tmin = dataclasses.I3Time()
 leap_tmax = dataclasses.I3Time()
 leap_tmin.set_utc_cal_date(2012,6,30,3,24,03,0.)
 leap_tmax.set_utc_cal_date(2015,5,18,0,59,04,0.)
 
 
-def Fix_LeapSecond(frame, start_date=None, end_date=None):
+def fix_leap_second(frame, start_date=None, end_date=None):
+    if (header.start_time >= start_date and header.start_time < end_date):
         header = frame['I3EventHeader']
+        original_header = copy.deepcopy(frame['I3EventHeader'])
+        header.end_time += I3Units.second
+        header.start_time += I3Units.second
+        del frame['I3EventHeader']
+        frame['I3EventHeader'] = header
+        frame['I3EventHeader_uncorrected_leap_second'] = original_header
+    return True
 
-        if (header.start_time >= start_date and header.start_time < end_date):
-            header.end_time += I3Units.second
-            header.start_time += I3Units.second
-            del frame['I3EventHeader']
-            frame['I3EventHeader'] = header
-        return True
+tray.AddModule(fix_leap_second,
+              start_date=leap_tmin,
+              end_date=leap_tmax)
 
 
 # Write the physics and DAQ frames
