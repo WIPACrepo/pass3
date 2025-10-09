@@ -208,31 +208,35 @@ def check_q_frame_keys(frame, keylist):
             icetray.logging.log_error(f"Unexpected key in output file: {item}")
 
 
+
+# Base Processing
+# https://github.com/icecube/icetray/blob/main/online_filterscripts/python/base_segments/base_processing.py#L57
+
 ##############################
 #  ICETRAY PROCESSING BELOW  #
 ##############################
 # add one second to event header to compensate for missed leap second adjustment
 # https://internal-apps.icecube.wisc.edu/reports/data/icecube/2018/12/001/icecube_201812001_v1.pdf
-leap_tmin = dataclasses.I3Time()
-leap_tmax = dataclasses.I3Time()
-leap_tmin.set_utc_cal_date(2012,6,30,3,24,03,0.)
-leap_tmax.set_utc_cal_date(2015,5,18,0,59,04,0.)
+# leap_tmin = dataclasses.I3Time()
+# leap_tmax = dataclasses.I3Time()
+# leap_tmin.set_utc_cal_date(2012,6,30,3,24,03,0.)
+# leap_tmax.set_utc_cal_date(2015,5,18,0,59,04,0.)
 
 
-def fix_leap_second(frame, start_date=None, end_date=None):
-    if (header.start_time >= start_date and header.start_time < end_date):
-        header = frame['I3EventHeader']
-        original_header = copy.deepcopy(frame['I3EventHeader'])
-        header.end_time += I3Units.second
-        header.start_time += I3Units.second
-        del frame['I3EventHeader']
-        frame['I3EventHeader'] = header
-        frame['I3EventHeader_uncorrected_leap_second'] = original_header
-    return True
+# def fix_leap_second(frame, start_date=None, end_date=None):
+#     if (header.start_time >= start_date and header.start_time < end_date):
+#         header = frame['I3EventHeader']
+#         original_header = copy.deepcopy(frame['I3EventHeader'])
+#         header.end_time += I3Units.second
+#         header.start_time += I3Units.second
+#         del frame['I3EventHeader']
+#         frame['I3EventHeader'] = header
+#         frame['I3EventHeader_uncorrected_leap_second'] = original_header
+#     return True
 
-tray.AddModule(fix_leap_second,
-              start_date=leap_tmin,
-              end_date=leap_tmax)
+# tray.AddModule(fix_leap_second,
+#               start_date=leap_tmin,
+#               end_date=leap_tmax)
 
 
 # Write the physics and DAQ frames
