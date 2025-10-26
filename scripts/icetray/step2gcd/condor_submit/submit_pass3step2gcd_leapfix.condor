@@ -3,7 +3,7 @@ my_scratch = /scratch/i3filter
 my_dir = IC86_OfflineProcessing/OfflineSubmitScripts_pass3step2gcd_leapfix_test
 
 initialdir = $(my_work)/$(my_dir)
-executable = $(initialdir)/work/leapfix_gcdfile.sh 
+executable = $(initialdir)/src/pass3/leapfix/scripts/icetray/step2gcd/leapfix_gcdfile.sh 
 
 request_memory = 7000
 
