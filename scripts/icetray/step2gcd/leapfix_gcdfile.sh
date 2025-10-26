@@ -30,7 +30,7 @@ echo "${0} ` eval ${DATE_NOW} ` ENV = ${ENV}"
 BASEDIR="icetray/v1.15.3"
 echo "${0} ` eval ${DATE_NOW} ` BASEDIR = ${BASEDIR}"
 
-SCRIPT="/data/user/i3filter/IC86_OfflineProcessing/OfflineSubmitScripts_pass3step2gcd_leapfix_test/work/leapfix_gcdfile.py"
+SCRIPT="/data/user/i3filter/IC86_OfflineProcessing/OfflineSubmitScripts_pass3step2gcd_leapfix_test/src/pass3/leapfix/scripts/icetray/step2gcd/leapfix_gcdfile.py"
 echo "${0} ` eval ${DATE_NOW} ` SCRIPT = ${SCRIPT}"
 
 SCRATCH=$_CONDOR_SCRATCH_DIR
