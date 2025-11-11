@@ -68,6 +68,7 @@ while gcdfile_in.more():
                 if key in fadc or not math.isnan(item.mean_fadc_charge_correction):
                     item.mean_fadc_charge_correction = 1.0
                 if math.isnan(item.relative_dom_eff):
+                    print(f"correct relative DOM efficiency for DOM {key}")
                     item.relative_dom_eff = 1.0
                 cal_o[key] = item
         calitem.dom_cal = cal_o  # type: ignore[attr-defined]
