@@ -230,7 +230,7 @@ def runner(infiles: tuple[Path, Path, Path, Path]) -> str:
         local_outfile,
         qify = True)
     moni_command = generate_command(
-        Path("/opt/pass3/scripts/icetray/step1/pass3_step1_unpackdst.py"),# pass3_check_charge_filter.py"),
+        Path("/opt/pass3/scripts/icetray/step1/pass3_check_charge_filter.py"),
         local_outfile,
         local_gcd,
         local_outfile)
@@ -282,7 +282,9 @@ def runner(infiles: tuple[Path, Path, Path, Path]) -> str:
         return f"ALERT: Output file {outfile} is not a valid i3 file."
 
     print("Copying moni files")
-    shutil.copyfile(str(local_outfile) + ".npz", str(outfile) + ".npz",)
+    shutil.copyfile(str(local_outfile) + ".npz", str(outfile) + ".npz")
+    shutil.copyfile(str(local_outfile) + "fadc_atwd_charge.npz",
+                    str(outfile) + "fadc_atwd_charge.npz",)
     shutil.copyfile(str(local_outfile) + ".txt", str(outfile) + ".txt")
 
     shutil.rmtree(tmpdir)
