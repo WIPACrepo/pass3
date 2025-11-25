@@ -38,7 +38,7 @@ class ChargeMonitorI3Module(I3ConditionalModule):
         I3ConditionalModule.__init__(self, context)
         self.AddParameter("input_key",
                           "Pulses to monitor",
-                          "InIceDSTPulses")
+                          "I3SuperDST")
         self.AddParameter("output_file_path",
                           "npz file to write information to",
                           None)
