@@ -111,25 +111,53 @@ def year_in_path(file_path: str,
         return True
     return False
 
-def read_checksum_file(file_path: Path,
-                       year: int,
-                       month: int,
-                       numnodes: int):
-    if numnodes <= 0:
-        raise Exception(f"Number of nodes {numnodes} has to be >= 1")
+def get_file_checksums(file_path: Path) -> defaultdict(Path):
+    """"Reading in the checksum file"""
     tmp_checksums = defaultdict(Path)
     with Path.open(file_path, "r") as f:
         while line := f.readline():
             line = line.rstrip()
-            # Assuming each line is formatted (<sha512sum> <file_path>) and the values are separated by a space
+            # Assuming each line is formatted (<sha512sum> <absolute_file_path>) and space separated
             checksum, archive_path = line.split()
-            if year_in_path(archive_path, year) and (month != 0 and month_in_path(archive_path, month)):
-                tmp_checksums[Path(archive_path)] = checksum
+            tmp_checksums[Path(archive_path)] = checksum
+    return tmp_checksums
+
+def get_checksum_year_month(file_path: Path,
+                            year: int,
+                            month: int,
+                            numnodes: int) -> list:
+    """
+    Get the list of file paths and their checksums for a given month and year. Chunking them up by number of nodes to make srun multiprog happy
+    """
+    if numnodes <= 0:
+        raise Exception(f"Number of nodes {numnodes} has to be >= 1")
+    tmp_checksums = get_file_checksums(file_path)
+    filtered_checksum = { key: value for key, value in tmp_checksums.items() 
+                         if year_in_path(key, year) and (month != 0 and month_in_path(key, month))}
+    tmp_checksums[Path(archive_path)] = checksum
     tmp_checksums = OrderedDict(sorted(tmp_checksums.items()))
     if numnodes == 1:
-        return [tmp_checksums]
+        return [filtered_checksum]
     else:
-        return [i for i in chunks(tmp_checksums, numnodes)]
+        # chunking the map of files to checksums according to the
+        # number of nodes
+        return [i for i in chunks(filtered_checksum, numnodes)]
+
+def get_checksums_bundles(file_path: Path,
+                          bundles: list[Path],
+                          numnodes: int) -> list:
+    if numnodes <= 0:
+        raise Exception(f"Number of nodes {numnodes} has to be >= 1")
+    bundle_names = [b.name for b in bundles]
+    tmp_checksums = get_file_checksums(file_path)
+    filtered_checksum = { key: value for key, value in tmp_checksums.items() 
+                         if key.name in bundle_names}
+    if numnodes == 1:
+        return [filtered_checksum]
+    else:
+        # chunking the map of files to checksums according to the
+        # number of nodes
+        return [i for i in chunks(filtered_checksum, numnodes)]
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -140,7 +168,8 @@ if __name__ == "__main__":
     parser.add_argument("--year",
                         help="year to process",
                         type=int,
-                        required=True)
+                        default=-1,
+                        required=False)
     parser.add_argument("--gcddir",
                         help="Directory with GCD files",
                         type=Path,
@@ -165,7 +194,7 @@ if __name__ == "__main__":
     parser.add_argument("--month",
                         help="month to process",
                         type=int,
-                        default=0,
+                        default=-1,
                         required=False)
     parser.add_argument("--numnodes",
                         help="number of nodes",
@@ -208,11 +237,23 @@ if __name__ == "__main__":
     parser.add_argument("--bundlesready",
                         help="whether bundles are already in tmp location",
                         action="store_true")
+    parser.add_argument("--bundles",
+                        help="a list of bundles to process",
+                        nargs='+',
+                        type=Path,
+                        required=False
+                        )
     args=parser.parse_args()
 
-    env_shell = Path(f"/cvmfs/icecube.opensciencegrid.org/py3-v4.4.1/RHEL_9_{args.cpuarch}/metaprojects/icetray/v1.15.2/bin/icetray-shell")
+    env_shell = Path(f"/cvmfs/icecube.opensciencegrid.org/py3-v4.4.1/RHEL_9_{args.cpuarch}/metaprojects/icetray/v1.60.0/bin/icetray-shell")
 
-    checksums = read_checksum_file(args.checksum_file, args.year, args.month, args.numnodes)
+    if year != -1 and month != -1:
+        checksums = get_checksum_year_month(args.checksum_file,
+                                            args.year, args.month, args.numnodes)
+    elif len(args.bundles) > 0:
+        checksums = get_checksums_bundles(args.checksum_file, args.year, args.month, args.numnodes)
+    else:
+        raise RuntimeError("Need to provide a year and month or list of bundles to process")
 
     for i, cs in enumerate(checksums):
         write_srun_multiprog(
