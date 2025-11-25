@@ -69,6 +69,7 @@ def generate_command(scriptloc: Path,
 # Adapted from: https://stackoverflow.com/a/44873382
 def get_sha512sum(filename: Union[str, Path]) -> str:
     """Compute the SHA512 hash of the data in the specified file."""
+    print(f"Gettng sha512sum for {filename}")
     h = hashlib.sha512()
     b = bytearray(128 * 1024)
     mv = memoryview(b)
@@ -121,6 +122,7 @@ def prepare_inputs(outdir: Path,
 
     if (scratchdir / bundle.name).exists():
         # Checking if available bundle is good
+        print(f"{scratchdir / bundle.name} exists")
         bundle_sha512sum = get_sha512sum(scratchdir / bundle.name)
         if bundle_sha512sum != checksum:
             shutil.rmtree(scratchdir / bundle.name)
@@ -170,7 +172,7 @@ def get_bad_files(bad_files_path: Path) -> list[str]:
 def check_i3_file(infile: Path) -> bool:
     print(f"Checking whether {infile} is a valid i3 file.")
     try:
-        cmd = f"python3 os.environ['I3_BUILD']/dataio/resources/examples/scan.py -c {infile}"
+        cmd = f"python3 {os.environ['I3_BUILD']}/dataio/resources/examples/scan.py -c {infile}"
         subprocess.run(cmd, shell=True)
     except:
         print("Renaming broken i3 file")
@@ -239,6 +241,9 @@ def runner(infiles: tuple[Path, Path, Path, Path]) -> str:
     # We are first running the online processing that is the same as done
     # at the south pole. we then read the file back in, rehydrate it, and
     # run some moni code on it to make sure we are doing the right thing.
+
+    print(f"Running command: {command}")
+
     try:
         with open(local_stdout_file, "w") as stdout, open(local_stderr_file, "w") as stderr:
             # TODO: Do we need to check the GCD file?
