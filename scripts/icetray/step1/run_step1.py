@@ -131,9 +131,16 @@ def prepare_inputs(outdir: Path,
             if bundle_sha512sum != checksum:
                 # Bundle from tape is borked...
                 raise Exception(f"Bundle {bundle} checksum is not what we expect. Something wrong with tape bundle???")
+    elif bundle.exists():
+         bundle_sha512sum = get_sha512sum(bundle)
+         if bundle_sha512sum != checksum:
+             shutil(bundle, bundle + ".broken")
+             raise Exception(f"Bundle {bundle} checksum is not what we expect. Something wrong with bundle???")
+         bundle.symlink_to(scratchdir / bundle.name)
     else:
         # Getting bundle if it doesn't exist
-        get_bundle(bundle, scratchdir)
+        # get_bundle(bundle, scratchdir)
+        raise FileExistsError(f"Bundle {bundle} does not existing in scratch dir {scratchdir} or provided path")
 
     scratch_bundle_loc = scratchdir / bundle.name
 
@@ -176,7 +183,7 @@ def check_i3_file(infile: Path) -> bool:
         subprocess.run(cmd, shell=True)
     except:
         print("Renaming broken i3 file")
-        os.rename(infile, str(infile) + ".bad")
+        infile.rename(Path(str(infile) + ".bad"))
         return False
     else:
         return True
@@ -265,8 +272,8 @@ def runner(infiles: tuple[Path, Path, Path, Path]) -> str:
                     f"End Time: {datetime.datetime.now(datetime.timezone.utc)}\n")
     finally:
         print("Copying logs")
-        shutil.copyfile(local_stdout_file, stdout_file)
-        shutil.copyfile(local_stderr_file, stderr_file)
+        local_stdout_file.copy(stdout_file)
+        local_stderr_file.copy(stderr_file)
 
     # create checksum of output file
     print(f"Getting sha512sum for {local_outfile}")
@@ -277,7 +284,7 @@ def runner(infiles: tuple[Path, Path, Path, Path]) -> str:
 
     # Copying from local dir to absolute dir
     print("Copying output file")
-    shutil.copyfile(local_outfile, outfile)
+    local_outfile.copy(outfile)
 
     sha512sum_final = get_sha512sum(outfile)
     if sha512sum_final != sha512sum:
