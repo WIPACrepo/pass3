@@ -101,7 +101,7 @@ def write_srun_multiprog(file: Path,
 def month_in_path(file_path: str,
                   month: int) -> bool:
     """Example path on Ranch: /stornext/ranch_01/ranch/projects/TG-PHY150040/data/exp/IceCube/2020/unbiased/PFRaw/0420/7202275ab7a111eb8013bedaff42a7c6.zip"""
-    if str(month) in get_date_filepath(file_path)[0:2]:
+    if month ==  int(get_date_filepath(file_path)[0:2]):
         return True
     return False
 
@@ -210,7 +210,7 @@ if __name__ == "__main__":
                         action="store_true")
     args=parser.parse_args()
 
-    env_shell = Path(f"/cvmfs/icecube.opensciencegrid.org/py3-v4.4.1/RHEL_9_{args.cpuarch}/metaprojects/icetray/v1.15.2/bin/icetray-shell")
+    env_shell = Path(f"/cvmfs/icecube.opensciencegrid.org/py3-v4.4.2/RHEL_9_{args.cpuarch}/metaprojects/icetray/v1.16.0/bin/icetray-shell")
 
     checksums = read_checksum_file(args.checksum_file, args.year, args.month, args.numnodes)
 
