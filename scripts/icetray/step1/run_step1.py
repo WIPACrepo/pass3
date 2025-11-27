@@ -188,6 +188,17 @@ def check_i3_file(infile: Path) -> bool:
     else:
         return True
 
+def check_gcd_file(gcdfile: Path) -> bool:
+    print(f"Checking whether {gcdfile} is a good GCD file.")
+    try:
+        cmd = f"python3 /opt/pass3/scripts/icetray/step1/pass3_check_gcd.py -g {gcdfile} --corrections /opt/pass3/data/average_FADC_gain_bias_corrections.json"
+        subprocess.run(cmd, shell=True)
+    except:
+        print(f"GCD file {gcdfile} is not correct")
+        return False
+    else:
+        return True
+
 def runner(infiles: tuple[Path, Path, Path, Path]) -> str:
 
     print(shutil.disk_usage("/tmp"))
@@ -205,8 +216,11 @@ def runner(infiles: tuple[Path, Path, Path, Path]) -> str:
     if not gcd.exists():
         raise FileNotFoundError("No GCD")
 
+    if not check_gcd_file(gcd):
+        return f"GCD file {gcd} is not correct."
+
     print(f"Copying GCD file: {gcd}")
-    shutil.copyfile(gcd, tmpdir / gcd.name)
+    gcd.copy(tmpdir / gcd.name)
     local_gcd = tmpdir / gcd.name
 
     # Prepping files and file paths
