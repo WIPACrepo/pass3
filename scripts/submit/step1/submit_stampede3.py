@@ -52,10 +52,10 @@ def write_slurm_file(file: Path,
             f.write(f"\n")
 
 def get_year_filepath(file_path: str) -> str:
-    return file_path.split("/")[9]
+    return str(file_path).split("/")[9]
 
 def get_date_filepath(file_path: str) -> str:
-    return file_path.split("/")[12]
+    return str(file_path).split("/")[12]
 
 def write_srun_multiprog(file: Path,
                          bundles: defaultdict[Path],
@@ -134,8 +134,8 @@ def get_checksum_year_month(file_path: Path,
     tmp_checksums = get_file_checksums(file_path)
     filtered_checksum = { key: value for key, value in tmp_checksums.items() 
                          if year_in_path(key, year) and (month != 0 and month_in_path(key, month))}
-    tmp_checksums[Path(archive_path)] = checksum
-    tmp_checksums = OrderedDict(sorted(tmp_checksums.items()))
+    # tmp_checksums[Path(archive_path)] = checksum
+    # tmp_checksums = OrderedDict(sorted(tmp_checksums.items()))
     if numnodes == 1:
         return [filtered_checksum]
     else:
@@ -247,7 +247,7 @@ if __name__ == "__main__":
 
     env_shell = Path(f"/cvmfs/icecube.opensciencegrid.org/py3-v4.4.2/RHEL_9_{args.cpuarch}/metaprojects/icetray/v1.16.0/bin/icetray-shell")
 
-    if year != -1 and month != -1:
+    if args.year != -1 and args.month != -1:
         checksums = get_checksum_year_month(args.checksum_file,
                                             args.year, args.month, args.numnodes)
     elif len(args.bundles) > 0:

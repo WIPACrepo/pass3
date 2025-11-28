@@ -110,39 +110,51 @@ def get_run_number(file: str) -> int:
     except:
         raise ValueError(f"File {file} is causing issues when extracting run number")
 
+def get_MMDD(bundle: Path) -> str:
+    # /stornext/ranch_01/ranch/projects/TG-PHY150040/data/exp/IceCube/2022/unbiased/PFRaw/0131/e88990d2110611eea23ac29b9287f457.zip
+    return str(bundle).split("/")[-2]
+
+
 def prepare_inputs(outdir: Path,
                    scratchdir: Path,
                    bundle: Path,
                    checksum: str,
                    gcddir: Path,
                    grl: list[int],
-                   bad_files: list[str]) -> list:
+                   bad_files: list[str],
+                   transfer_bundle: bool = False) -> list:
     if not outdir.exists():
         outdir.mkdir(parents=True, exist_ok=True)
 
+    MMDD = get_MMDD(bundle)
+
     if (scratchdir / bundle.name).exists():
         # Checking if available bundle is good
-        print(f"{scratchdir / bundle.name} exists")
+        # print(f"{scratchdir / bundle.name} exists")
         bundle_sha512sum = get_sha512sum(scratchdir / bundle.name)
         if bundle_sha512sum != checksum:
-            shutil.rmtree(scratchdir / bundle.name)
-            get_bundle(bundle, scratchdir)
-            bundle_sha512sum = get_sha512sum(scratchdir / bundle.name)
-            if bundle_sha512sum != checksum:
-                # Bundle from tape is borked...
-                raise Exception(f"Bundle {bundle} checksum is not what we expect. Something wrong with tape bundle???")
+            raise Exception(f"Bundle {bundle} checksum is not what we expect. Something wrong with tape bundle???")
+        scratch_bundle_loc = scratchdir / bundle.name
+    elif (scratchdir / MMDD / bundle.name).exists():
+        bundle_sha512sum = get_sha512sum(scratchdir / MMDD / bundle.name)
+        if bundle_sha512sum != checksum:
+            raise Exception(f"Bundle {bundle} checksum is not what we expect")
+        scratch_bundle_loc = scratchdir / MMDD / bundle.name
     elif bundle.exists():
-         bundle_sha512sum = get_sha512sum(bundle)
-         if bundle_sha512sum != checksum:
-             shutil(bundle, bundle + ".broken")
-             raise Exception(f"Bundle {bundle} checksum is not what we expect. Something wrong with bundle???")
-         bundle.symlink_to(scratchdir / bundle.name)
+        bundle_sha512sum = get_sha512sum(bundle)
+        if bundle_sha512sum != checksum:
+            raise Exception(f"Bundle {bundle} checksum is not what we expect.")
+        scratch_bundle_loc = bundle
+    elif transfer_bundle:
+        get_bundle(bundle, scratchdir)
+        bundle_sha512sum = get_sha512sum(scratchdir / bundle.name)
+        if bundle_sha512sum != checksum:
+            raise Exception(f"Bundle {bundle} checksum is not what we expect. Something wrong with tape bundle???")
+        scratch_bundle_loc = scratchdir / bundle.name
     else:
         # Getting bundle if it doesn't exist
         # get_bundle(bundle, scratchdir)
         raise FileExistsError(f"Bundle {bundle} does not existing in scratch dir {scratchdir} or provided path")
-
-    scratch_bundle_loc = scratchdir / bundle.name
 
     infiles = [f for f in zipfile.ZipFile(scratch_bundle_loc).namelist()
                if ".tar.gz" in f]
@@ -360,6 +372,9 @@ if __name__ == "__main__":
                         help="known bad files list",
                         type=Path,
                         required=True)
+    parser.add_argument("--transferbundle",
+                        help="transfer bundle from tape",
+                        action='store_true')
     args=parser.parse_args()
 
     if args.maxnumcpus == 0:
@@ -382,7 +397,8 @@ if __name__ == "__main__":
                             args.checksum,
                             args.gcddir,
                             grl,
-                            badfiles)
+                            badfiles,
+                            args.transferbundle)
 
     run_parallel(inputs, numcpus)
 
