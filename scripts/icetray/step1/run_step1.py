@@ -232,7 +232,7 @@ def runner(infiles: tuple[Path, Path, Path, Path]) -> str:
         return f"GCD file {gcd} is not correct."
 
     print(f"Copying GCD file: {gcd}")
-    gcd.copy(tmpdir / gcd.name)
+    shutil.copy(gcd, tmpdir / gcd.name)
     local_gcd = tmpdir / gcd.name
 
     # Prepping files and file paths
@@ -298,8 +298,8 @@ def runner(infiles: tuple[Path, Path, Path, Path]) -> str:
                     f"End Time: {datetime.datetime.now(datetime.timezone.utc)}\n")
     finally:
         print("Copying logs")
-        local_stdout_file.copy(stdout_file)
-        local_stderr_file.copy(stderr_file)
+        shutil.copy(local_stdout_file, stdout_file)
+        shutil.copy(local_stderr_file, stderr_file)
 
     # create checksum of output file
     print(f"Getting sha512sum for {local_outfile}")
@@ -310,7 +310,7 @@ def runner(infiles: tuple[Path, Path, Path, Path]) -> str:
 
     # Copying from local dir to absolute dir
     print("Copying output file")
-    local_outfile.copy(outfile)
+    shutil.copy(local_outfile, outfile)
 
     sha512sum_final = get_sha512sum(outfile)
     if sha512sum_final != sha512sum:
@@ -387,6 +387,11 @@ if __name__ == "__main__":
     # os.system(f'taskset -cp 0-{numcpus} {os.getpid()}')
 
     print(f"CPU count: {numcpus}")
+
+    print(f"Processing {args.bundle}")
+
+    if not Path("/cvmfs/icecube.opensciencegrid.org/data/photon-tables/splines/InfBareMu_mie_prob_z20a10_V2.fits").exists():
+        raise FileNotFoundError("Cant find splines")
 
     grl = get_grl(args.grl)
     badfiles = get_bad_files(args.badfiles)
