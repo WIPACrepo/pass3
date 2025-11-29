@@ -38,7 +38,8 @@ def write_slurm_file(file: Path,
         f.write(f"#SBATCH -e {jobname}.e.%j\n")
         # f.write(f"#SBATCH -A {numnodes}\n")
         f.write(f"\n")
-        f.write(f"echo `date`\n")
+        f.write(f"echo `date`\n\n")
+        f.write(f"LD_PRELOAD=\n")
         f.write(f"\n")
         for i in range(multiprogfileincrements):
             multiprogfile_inc = multiprogfile.parent / (multiprogfile.name + str(i)) 
@@ -80,8 +81,9 @@ def write_srun_multiprog(file: Path,
         for i, (bundle, checksum) in enumerate(bundles.items()):
             year = get_year_filepath(str(bundle))
             date = get_date_filepath(str(bundle))
-            f.write(f"{i}  /opt/apps/tacc-apptainer/1.3.3/bin/apptainer  ")
+            f.write(f"{i}  /opt/apps/tacc-apptainer/1.3.3/bin/apptainer ")
             f.write(f"exec -B /home1/04799/tg840985/pass3:/opt/pass3 ")
+            f.write(f"-B /work/04799/tg840985/vista/splines/splines:/cvmfs/icecube.opensciencegrid.org/data/photon-tables/splines ")
             f.write(f"-B /work2 -B /scratch {apptainer_container} {env_shell} ")
             f.write(f"python3 {script} --bundle {bundle} --gcddir {gcddir} ")
             f.write(f"--outdir {outdir}/{year}/{date} --checksum {checksum} ")
