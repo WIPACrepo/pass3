@@ -2,6 +2,8 @@
 import argparse
 
 from icecube.icetray import I3Tray
+from icecube import dataio
+from icecube import icetray
 from monitoring_extractors.pass3_charge_monitor import ChargeMonitorI3Module
 from monitoring_extractors.pass3_calc_filter_rate import FilterRateMonitorI3Module
 from monitoring_extractors.pass3_charge_fadc_gain import PulseChargeFilterHarvester
@@ -31,12 +33,14 @@ tray = I3Tray()
 #          input_gcd=args.GCD,
 #          qify_input=True)
 
-tray.Add(dataio.I3Reader, "reader", FilenameList=[args.GCD] + args.INPUT)
+tray.Add(dataio.I3Reader, "reader", FilenameList=[args.GCD] + args.INFILES)
 
 
 tray.Add(ChargeMonitorI3Module, "charge_histogram",
          input_key = "I3SuperDST",
          output_file_path = args.OUTPUT_FILENAME + ".npz")
+
+tray.Add("Dump")
 
 tray.Add(FilterRateMonitorI3Module, "filter_rates",
          output_file = args.OUTPUT_FILENAME + ".txt")
