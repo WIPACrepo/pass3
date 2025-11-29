@@ -51,11 +51,17 @@ class FilterRateMonitorI3Module(I3ConditionalModule):
 
     def Finish(self):
         """"Aggregate info and write to txt file"""
-        time_l = (self.stop_time - self.start_time) / I3Units.second
-        if time_l < 0: 
-            raise ValueError("Invalid time length.")
-        with Path.open(self.outfile, "w") as f:
-            f.write(f"Files cover: {time_l} sec.\n")
-            f.write(f"Overall frame rate: {self.frame_cnt / time_l} Hz\n")
-            for afilter in self.filter_cnt:
-                f.write(f"Filter: {afilter} Rate: {self.filter_cnt[afilter] / time_l} Hz\n")
+        if self.frame_cnt > 0:
+            time_l = (self.stop_time - self.start_time) / I3Units.second
+            if time_l < 0:
+                raise ValueError("Invalid time length.")
+            with Path.open(self.outfile, "w") as f:
+                f.write(f"Files cover: {time_l} sec.\n")
+                f.write(f"Overall frame rate: {self.frame_cnt / time_l} Hz\n")
+                for afilter in self.filter_cnt:
+                    f.write(f"Filter: {afilter} Rate: {self.filter_cnt[afilter] / time_l} Hz\n")
+        else:
+            with Path.open(self.outfile, "w") as f:
+                print(self.start_time)
+                print(self.stop_time)
+                print(self.frame_cnt)
