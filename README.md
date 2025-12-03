@@ -147,38 +147,6 @@ Notes, Scripts, etc. regarding Pass3
 | 2022 | Oct | :x: | :x: |
 | 2022 | Nov | :white_check_mark: | :x: |
 | 2022 | Dec | :x: | :x: |
-
-<!-- |---|---|---|
-
-
-|---|---|---|
-| 2020 | Feb | :x: | :x: |
-| 2020 | Mar | :x: | :x: |
-| 2020 | Apr | :x: | :x: |
-| 2020 | May | :x: | :x: |
-| 2020 | Jun | :x: | :x: |
-| 2020 | Jul | :x: | :x: |
-| 2020 | Aug | :x: | :x: |
-| 2020 | Sep | :x: | :x: |
-| 2020 | Oct | :x: | :x: |
-| 2020 | Nov | :x: | :x: |
-| 2020 | Dec | :x: | :x: |
-|---|---|---|
-
-|---|---|---|
-| 2022 | Jan | :white_check_mark: | :x: |
-| 2022 | Feb | :white_check_mark: | :x: |
-| 2022 | Mar | :x: | :x: |
-| 2022 | Apr | :white_check_mark: | :x: |
-| 2022 | May | :white_check_mark: | :x: |
-| 2022 | Jun | :white_check_mark: | :x: |
-| 2022 | Jul | :white_check_mark: | :x: |
-| 2022 | Aug | :white_check_mark: | :x: |
-| 2022 | Sep | :x: | :x: |
-| 2022 | Oct | :x: | :x: |
-| 2022 | Nov | :white_check_mark: | :x: |
-| 2022 | Dec | :x: | :x: |
-|---|---|---|
 | 2023 | Jan | :x: | :x: |
 | 2023 | Feb | :x: | :x: |
 | 2023 | Mar | :x: | :x: |
@@ -191,7 +159,6 @@ Notes, Scripts, etc. regarding Pass3
 | 2023 | Oct | :x: | :x: |
 | 2023 | Nov | :x: | :x: |
 | 2023 | Dec | :x: | :x: |
-|---|---|---|
 | 2024 | Jan | :x: | :x: |
 | 2024 | Feb | :x: | :x: |
 | 2024 | Mar | :x: | :x: |
@@ -204,7 +171,6 @@ Notes, Scripts, etc. regarding Pass3
 | 2024 | Oct | :x: | :x: |
 | 2024 | Nov | :x: | :x: |
 | 2024 | Dec | :x: | :x: |
-|---|---|---|
 | 2025 | Jan | :x: | :x: |
 | 2025 | Feb | :x: | :x: |
 | 2025 | Mar | :x: | :x: |
@@ -217,9 +183,8 @@ Notes, Scripts, etc. regarding Pass3
 | 2025 | Oct | :x: | :x: |
 | 2025 | Nov | :x: | :x: |
 | 2025 | Dec | :x: | :x: |
-|---|---|---|
 | 2026 | Jan | :x: | :x: |
 | 2026 | Feb | :x: | :x: |
 | 2026 | Mar | :x: | :x: |
 | 2026 | Apr | :x: | :x: |
-| 2026 | May | :x: | :x: | -->
+| 2026 | May | :x: | :x: | 
