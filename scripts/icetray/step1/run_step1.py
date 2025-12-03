@@ -8,6 +8,7 @@ import shutil
 import tempfile
 import time
 import random
+import json
 
 from pathlib import Path, PosixPath
 import concurrent.futures
@@ -26,11 +27,14 @@ def get_gcd(infile: Path, gcddir: Path) -> Path:
     runnum = get_run_number(str(infile))
     gcdfiles = list(gcddir.glob(f"*{runnum}*"))
     if len(gcdfiles) > 1:
-        raise Exception(f"Multiple GCD Files {gcdfiles}")
+        raise Exception(f"Multiple GCD Files {gcdfiles} for {runnum}")
     elif len(gcdfiles) == 1:
-        return gcdfiles[0]
+        if gcdfiles[0]:
+            return gcdfiles[0]
+        else:
+            raise Exception(f"None type GCD file for {runnum}")
     else:
-        FileNotFoundError("No GCD found")
+        FileNotFoundError("No GCD found for {runnum}")
 
 def get_outfilename(infile: Path) -> Path:
     # Assuming Format of infile name is:
@@ -251,7 +255,7 @@ def runner(infiles: tuple[Path, Path, Path, Path]) -> str:
     if outfile.exists():
         if not check_i3_file(outfile):
             print(f"Output file {outfile} is not a valid i3 file.")
-        return f"Output file {outfile} already exists"
+        return f"Output file {outfile} from bundle {bundle} already exists."
 
     local_stdout_file, local_stderr_file = get_logfilenames(infile,
                                                             tmpdir)
@@ -321,21 +325,27 @@ def runner(infiles: tuple[Path, Path, Path, Path]) -> str:
 
     print("Copying moni files")
     shutil.copyfile(str(local_outfile) + ".npz", str(outfile) + ".npz")
-    shutil.copyfile(str(local_outfile) + "fadc_atwd_charge.npz",
-                    str(outfile) + "fadc_atwd_charge.npz",)
+    shutil.copyfile(str(local_outfile) + ".fadc_atwd_charge.npz",
+                    str(outfile) + ".fadc_atwd_charge.npz",)
     shutil.copyfile(str(local_outfile) + ".txt", str(outfile) + ".txt")
 
     shutil.rmtree(tmpdir)
-    return f"Processing file {infile} from bundle {bundle} was SUCCESSFUL. Output file {outfile} with checksum {sha512sum}."
+    return f"SUCCESS: Processing file {infile} from bundle {bundle} was SUCCESSFUL. Output file {outfile} with checksum {sha512sum}."
 
 def run_parallel(infiles, max_num=1):
-    print(f"max workers: {max_num}")
-    print(f"length infiles: {len(infiles)}")
+    success = { str(infiles[0][1]): [] }
     with concurrent.futures.ProcessPoolExecutor(
         max_workers = max_num) as executor:
         futures = executor.map(runner, infiles)
         for f in futures:
             print(f)
+            if str(f).startswith("SUCCESS:"):
+                 outfile = f.split(" ")[11]
+                 checksum = f.split(" ")[-1][:-1]
+                 success[str(infiles[1])].append({"file": outfile,
+                                                  "checksum": checksum})
+        with open( str(infiles[0][3] / infiles[0][1].name) + ".json", "w") as f:
+            json.dump(success, f)
     return futures
 
 if __name__ == "__main__":
