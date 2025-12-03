@@ -49,26 +49,24 @@ class PulseChargeFilterHarvester(icetray.I3ConditionalModule):
 
     def DAQ(self, frame):
         """Grab information from Q-frames for testing."""
-        pulsemap = dataclasses.I3RecoPulseSeriesMap.from_frame(frame,  self.psm_key)
-        for omkey, pulses in pulsemap.items():
-            if len(pulses) == 0: continue
-            
-            q_atwd, q_fadc = 0, 0
-            for pulse in pulses:
-                if pulse.flags & pulse.PulseFlags.ATWD:
-                    q_atwd += pulse.charge
-                else:
-                    q_fadc += pulse.charge
+        if self.psm_key in frame:
+            pulsemap = dataclasses.I3RecoPulseSeriesMap.from_frame(frame,  self.psm_key)
+            for omkey, pulses in pulsemap.items():
+                if len(pulses) == 0: continue
+                q_atwd, q_fadc = 0, 0
+                for pulse in pulses:
+                    if pulse.flags & pulse.PulseFlags.ATWD:
+                        q_atwd += pulse.charge
+                    else:
+                        q_fadc += pulse.charge
+                if (self.charge_bins[0] < q_atwd) & (q_atwd < self.charge_bins[-1]):
+                    atwd_bin = int(q_atwd/self.charge_binsize)
+                    self.atwd_charges[omkey][atwd_bin] += 1
+                if (self.charge_bins[0] < q_fadc) & (q_fadc < self.charge_bins[-1]):
+                    fadc_bin = int(q_fadc/self.charge_binsize)
+                    self.fadc_charges[omkey][fadc_bin] += 1
 
-            if (self.charge_bins[0] < q_atwd) & (q_atwd < self.charge_bins[-1]):
-                atwd_bin = int(q_atwd/self.charge_binsize)
-                self.atwd_charges[omkey][atwd_bin] += 1
-            if (self.charge_bins[0] < q_fadc) & (q_fadc < self.charge_bins[-1]):
-                fadc_bin = int(q_fadc/self.charge_binsize)
-                self.fadc_charges[omkey][fadc_bin] += 1
-
-        self.nframes += 1
-        # print(self.nframes)
+            self.nframes += 1
         self.PushFrame(frame)
         return
         
