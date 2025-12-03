@@ -1,4 +1,5 @@
 """Utility to check GCD files for known changes for Pass3."""
+from icecube import icetray
 from icecube.icetray import I3ConditionalModule
 from icecube.icetray import I3Tray
 from icecube import dataio
@@ -57,11 +58,13 @@ if __name__ == "__main__":
                         help="FADC gain correction JSON")
     args = parser.parse_args()
 
+    icetray.set_log_level_for_unit('I3Tray', icetray.I3LogLevel.LOG_TRACE)
+
     tray = I3Tray()
 
     tray.Add(dataio.I3Reader, "reader", FilenameList=[args.GCD])
 
-    tray.Add(CheckPass3GCDI3Module,
+    tray.Add(CheckPass3GCDI3Module, "gcd_checker",
              fadc_gain_correction_json=args.corr,
              old_fadc_gain_key="Original_FADC_Gain")
 
