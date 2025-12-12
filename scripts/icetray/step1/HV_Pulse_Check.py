@@ -1,7 +1,3 @@
-#!/bin/sh /cvmfs/icecube.opensciencegrid.org/py3-v4.3.0/icetray-start
-#METAPROJECT /data/ana/Calibration/SPE_Templates_v3/Software/icetray_v1.15.3_new/build
-
-
 import h5py
 import numpy as np 
 import icecube
