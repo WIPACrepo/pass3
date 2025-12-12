@@ -32,7 +32,7 @@ class PulseChargeFilterHarvester(icetray.I3ConditionalModule):
         self.peak_fit_bounds = self.GetParameter("PeakFitBounds")
         # Choose bins to match the charge discretization from SuperDST
         # https://docs.icecube.aq/icetray/main/projects/dataclasses/superdst.html#charge-stamps-inice
-        self.charge_binsize = 0.1
+        self.charge_binsize = 0.025
         self.charge_bins = np.arange(0, 5 + self.charge_binsize, self.charge_binsize)
         self.charge_bins_center = self.charge_bins[:-1] + np.diff(self.charge_bins)
         self.atwd_charges = {}
