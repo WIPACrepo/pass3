@@ -7,7 +7,6 @@ from icecube import icetray
 from monitoring_extractors.pass3_charge_monitor import ChargeMonitorI3Module
 from monitoring_extractors.pass3_calc_filter_rate import FilterRateMonitorI3Module
 from monitoring_extractors.pass3_charge_fadc_gain import PulseChargeFilterHarvester
-from icecube.offline_filterscripts.read_superdst_files import read_superdst_files
 
 parser = argparse.ArgumentParser(
     description='Histogram and dump to a pickle file.')
