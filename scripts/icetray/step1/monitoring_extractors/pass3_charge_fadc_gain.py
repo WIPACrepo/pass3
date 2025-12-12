@@ -21,16 +21,24 @@ class PulseChargeFilterHarvester(icetray.I3ConditionalModule):
                           "The path and name of the output file for this module as a string.",
                           "./PulseCharge_testvars.npz")
 
+        self.AddParameter("PeakFitBounds",
+                          "Bounds to ignore when calculating meaning charge",
+                          [0.8, 1.2])
+
     def Configure(self):
         """Do any preliminary setup."""
         self.output_filename = self.GetParameter("OutputFilename")
         self.psm_key = self.GetParameter("PulseSeriesMapKey")
+        self.peak_fit_bounds = self.GetParameter("PeakFitBounds")
         # Choose bins to match the charge discretization from SuperDST
         # https://docs.icecube.aq/icetray/main/projects/dataclasses/superdst.html#charge-stamps-inice
         self.charge_binsize = 0.1
         self.charge_bins = np.arange(0, 5 + self.charge_binsize, self.charge_binsize)
+        self.charge_bins_center = self.charge_bins[:-1] + np.diff(self.charge_bins)
         self.atwd_charges = {}
         self.fadc_charges = {}
+        self.bin_mask = ((self.peak_fit_bounds[0] <= self.charge_bins)
+                          & (self.charge_bins <= self.peak_fit_bounds[1]))[:-1]
 
         self.nframes = 0
 
@@ -69,10 +77,31 @@ class PulseChargeFilterHarvester(icetray.I3ConditionalModule):
             self.nframes += 1
         self.PushFrame(frame)
         return
-        
+
     def Finish(self):
+        self._write_histogram()
+        self._compare_charge_peaks()
+
+    def _compare_charge_peaks(self):
+        with open(self.output_filename + ".comparison", "w") as f:
+            for omkey in self.atwd_charges:
+                atwd_mean = self._estimate_peak(self.atwd_charges[omkey])
+                fadc_mean = self._estimate_peak(self.fadc_charges[omkey])
+                mean = (atwd_mean+fadc_mean)/2
+                ratio = np.abs(atwd_mean-fadc_mean)/mean
+                f.write(f"OMKey {omkey}, ATWD: {atwd_mean}, FADC: {fadc_mean}, ratio: {ratio}\n")
+                if ratio > 0.01:
+                    self.logger.warning(f"PulseChargeFilterHarvester: ATWD and FADC mean charge ratio for OMKey {omkey} is > 1%")
+
+    def _estimate_peak(self, histogram):
+        yvals = histogram * self.charge_bins_center
+        mean = yvals[self.bins_mask].sum()/histogram[self.bins_mask].sum()
+        return mean
+
+    def _write_histogram(self):
         """Write any output files you'll need for testing."""
         strings, oms, atwd, fadc = [], [], [], []
+
         for omkey in self.atwd_charges:
             strings.append(omkey.string)
             oms.append(omkey.om)
@@ -86,6 +115,6 @@ class PulseChargeFilterHarvester(icetray.I3ConditionalModule):
                  fadc =  np.array(fadc),
                  bins =  self.charge_bins,
                  allow_pickle = False)
-
-        self.logger.warning(f"PulseChargeFilterHarvester: Found and wrote ATWD and FADC mean charges"
+        self.logger.warning(f"PulseChargeFilterHarvester: Found " +
+                            "and wrote ATWD and FADC mean charges" +
                             f" to {self.output_filename}.")
