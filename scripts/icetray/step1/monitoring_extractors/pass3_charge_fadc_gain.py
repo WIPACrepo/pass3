@@ -39,7 +39,6 @@ class PulseChargeFilterHarvester(icetray.I3ConditionalModule):
         self.fadc_charges = {}
         self.bin_mask = ((self.peak_fit_bounds[0] <= self.charge_bins)
                           & (self.charge_bins <= self.peak_fit_bounds[1]))[:-1]
-
         self.nframes = 0
 
     def DetectorStatus(self, frame):
@@ -89,13 +88,14 @@ class PulseChargeFilterHarvester(icetray.I3ConditionalModule):
                 fadc_mean = self._estimate_peak(self.fadc_charges[omkey])
                 mean = (atwd_mean+fadc_mean)/2
                 ratio = np.abs(atwd_mean-fadc_mean)/mean
+                print(f"OMKey {omkey}, ATWD: {atwd_mean}, FADC: {fadc_mean}, ratio: {ratio}")
                 f.write(f"OMKey {omkey}, ATWD: {atwd_mean}, FADC: {fadc_mean}, ratio: {ratio}\n")
                 if ratio > 0.01:
                     self.logger.warning(f"PulseChargeFilterHarvester: ATWD and FADC mean charge ratio for OMKey {omkey} is > 1%")
 
     def _estimate_peak(self, histogram):
-        yvals = histogram * self.charge_bins_center
-        mean = yvals[self.bins_mask].sum()/histogram[self.bins_mask].sum()
+        yvals = histogram[:-1] * self.charge_bins_center
+        mean = yvals[self.bin_mask].sum()/histogram[:-1][self.bin_mask].sum()
         return mean
 
     def _write_histogram(self):
