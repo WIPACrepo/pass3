@@ -9,10 +9,14 @@ import tempfile
 import time
 import random
 import json
+import asyncio
+import datetime
+import copy
 
 from pathlib import Path, PosixPath
 import concurrent.futures
 from typing import Union, NoReturn
+from rest_tools.client import ClientCredentials
 
 def remove_extension(path: Path) -> Path:
     """Remove multiple suffixes from filename"""
@@ -209,28 +213,33 @@ def check_gcd_file(gcdfile: Path) -> bool:
         cmd = f"python3 /opt/pass3/scripts/icetray/step1/pass3_check_gcd.py -g {gcdfile} --corrections /opt/pass3/data/average_FADC_gain_bias_corrections.json"
         subprocess.run(cmd, shell=True)
     except:
-        logger.info(f"GCD file {gcdfile} is not correct")
-        return False
+        raise Exception(f"GCD file {gcdfile} is does not have correct values")
     else:
         return True
 
 def runner(infiles: tuple[Path, Path, Path, Path]) -> str:
 
     # Getting file and file paths
+    # Tuple of 4 paths
+    # Each bundble can be a mix of runs so we need to grab the right GCD
+    # for each infile
     gcddir = infiles[0]
+    # Location of the bundle
     bundle = infiles[1]
+    # File to be processed
     infile = infiles[2]
+    # Where to put the output
     outdir = infiles[3]
 
     # Creating a temporary working dir for this instance
     tmpdir = Path(tempfile.mkdtemp(dir=str(bundle.parent)))
 
+    # Getting the appropriate GCD file for a the run
     gcd = get_gcd(infile, gcddir)
-    if not gcd.exists():
-        raise FileNotFoundError("No GCD")
 
     if not check_gcd_file(gcd):
-        return f"GCD file {gcd} is not correct."
+        return { "status": "ERROR",
+                 "msg": "GCD file {gcd} is not correct."}
 
     print(f"Copying GCD file: {gcd}")
     shutil.copy(gcd, tmpdir / gcd.name)
@@ -252,7 +261,8 @@ def runner(infiles: tuple[Path, Path, Path, Path]) -> str:
     if outfile.exists():
         if not check_i3_file(outfile):
             raise Exception(f"Output file {outfile} is not a valid i3 file.")
-        return f"Output file {outfile} from bundle {bundle} already exists."
+        return { "status": "WARNING",
+                 "msg":  f"Output file {outfile} from bundle {bundle} already exists."}
 
     local_stdout_file, local_stderr_file = get_logfilenames(infile,
                                                             tmpdir)
@@ -285,18 +295,20 @@ def runner(infiles: tuple[Path, Path, Path, Path]) -> str:
             try:
                 subprocess.run(command, shell=True, stdout=stdout, stderr=stderr)
             except:
-                return f"ALERT: {infile} in {bundle} has failed to process\n"
+                return { "status": "ERROR",
+                         "msg": f"{infile} in {bundle} has failed to process."}
             stdout.write(
                     f"End Time PFRAW: {datetime.datetime.now(datetime.timezone.utc)}\n")
             try:
                 subprocess.run(
                     moni_command, shell=True, stdout=stdout, stderr=stderr)
             except:
-                return f"ALERT: {infile} in {bundle} has failed during moni\n"
+                return { "status": "ERROR",
+                         "msg": f"{infile} in {bundle} has failed during moni."}
             stdout.write(
                     f"End Time: {datetime.datetime.now(datetime.timezone.utc)}\n")
     finally:
-        logger.info("Copying logs")
+        print("Copying logs")
         shutil.copy(local_stdout_file, stdout_file)
         shutil.copy(local_stderr_file, stderr_file)
 
@@ -313,10 +325,11 @@ def runner(infiles: tuple[Path, Path, Path, Path]) -> str:
 
     sha512sum_final = get_sha512sum(outfile)
     if sha512sum_final != sha512sum:
-        return f"ALERT: Copying file {local_outfile} from tmp storage to final storage {outfile} failed. sha512sum mismatch."
-
+        return { "status": "ERROR",
+                 "msg": f"Copying file {local_outfile} from tmp storage to final storage {outfile} failed. sha512sum mismatch."}
     if not check_i3_file(outfile):
-        return f"ALERT: Output file {outfile} is not a valid i3 file."
+        return { "status": "ERROR",
+                 "msg": f"Output file {outfile} is not a valid i3 file."}
 
     print("Copying moni files")
     shutil.copyfile(str(local_outfile) + ".npz", str(outfile) + ".npz")
@@ -327,22 +340,62 @@ def runner(infiles: tuple[Path, Path, Path, Path]) -> str:
     shutil.copyfile(str(local_outfile) + ".txt", str(outfile) + ".txt")
 
     shutil.rmtree(tmpdir)
-    return f"SUCCESS: Processing file {infile} from bundle {bundle} was SUCCESSFUL. Output file {outfile} with checksum {sha512sum}."
+    return { "status": "SUCCESS",
+             "infile": f"{infile}",
+             "bundle": f"{bundle}",
+             "outfile": { "path": f"{outfile}",
+                          "sha512sum": f"{sha512sum}"}}
 
-def run_parallel(infiles, max_num=1):
+def get_year_filepath(file_path: str) -> str:
+    return str(file_path).split("/")[-3]
+
+def get_date_filepath(file_path: str) -> str:
+    return str(file_path).split("/")[-2]
+
+# TODO: post to file catalog with checksum
+async def post_filecatalog(file: Path, checksum: str, client_secret: str):
+    client = ClientCredentials(
+        address='https://file-catalog.icecube.aq',
+        token_url='https://keycloak.icecube.aq',
+        client_id='pass3-briedel',
+        client_secret=client_secret)
+
+    year = get_year_filepath(file)
+    MMDD = get_date_filepath(file)
+    time = datetime.utcfromtimestamp(
+        file.stat().mtime).strftime('%Y-%m-%d %H:%M:%S')
+    data = {
+        "logical_name": f"/data/exp/IceCube/{year}/unbiased/PFDST/{MMDD}/{file.name}",
+        "checksum": f"{checksum}",
+        "file_size": f"{file.stat().st_size}",
+        "locations": [{
+            "site": "TACC",
+            "path": f"{file}"
+        }],
+        "create_date": f"{time}"
+    }
+    await client.request('POST', '/api/files', data)
+
+def run_parallel(infiles, filecatalogsecret, max_num=1):
     success = { str(infiles[0][1]): [] }
+    files_to_be_processed = copy.copy([infiles[2] for i in infiles])
     with concurrent.futures.ProcessPoolExecutor(
         max_workers = max_num) as executor:
         futures = executor.map(runner, infiles)
         for f in futures:
             print(f)
-            if str(f).startswith("SUCCESS:"):
-                 outfile = f.split(" ")[11]
-                 checksum = f.split(" ")[-1][:-1]
-                 success[str(infiles[0][1])].append({"file": outfile,
-                                                  "checksum": checksum})
-        with open( str(infiles[0][3] / infiles[0][1].name) + ".json", "w") as f:
-            json.dump(success, f, indent=4, sort_keys=True)
+            if f["status"] == "SUCCESS":
+                success[str(infiles[0][1])].append({
+                    "file": f["outfile"]["name"],
+                    "checksum": f["outfile"]["sha512sum"]})
+                post_filecatalog(Path(f["outfile"]["name"]), 
+                                 f["outfile"]["sha512sum"],
+                                 filecatalogsecret)
+                files_to_be_processed.remove(f["infile"])
+    with open( str(infiles[0][3] / infiles[0][1].name) + ".json", "w") as f:
+        json.dump(success, f, indent=4, sort_keys=True)
+    if len(files_to_be_processed) >= 1:
+        raise Exception(f"Did not finish {files_to_be_processed}")
     return futures
 
 if __name__ == "__main__":
@@ -382,6 +435,9 @@ if __name__ == "__main__":
     parser.add_argument("--transferbundle",
                         help="transfer bundle from tape",
                         action='store_true')
+    parser.add_argument("--filecatalogsecret",
+                        type=str,
+                        required=True)
     args=parser.parse_args()
 
     if args.maxnumcpus == 0:
@@ -410,7 +466,7 @@ if __name__ == "__main__":
                             badfiles,
                             args.transferbundle)
 
-    run_parallel(inputs, numcpus)
+    run_parallel(inputs, args.filecatalogsecret, numcpus)
 
     # TODO: Delete bundle
     # shutil.rmtree(args.bundle)
