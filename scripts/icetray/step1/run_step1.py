@@ -9,16 +9,10 @@ import tempfile
 import time
 import random
 import json
-import logging
 
 from pathlib import Path, PosixPath
 import concurrent.futures
 from typing import Union, NoReturn
-
-logging.basicConfig()
-logging.basicConfig(level=logging.NOTSET)
-logger = logging.getLogger(__name__)
-
 
 def remove_extension(path: Path) -> Path:
     """Remove multiple suffixes from filename"""
@@ -79,7 +73,7 @@ def generate_command(scriptloc: Path,
 # Adapted from: https://stackoverflow.com/a/44873382
 def get_sha512sum(filename: Union[str, Path]) -> str:
     """Compute the SHA512 hash of the data in the specified file."""
-    logger.info(f"Gettng sha512sum for {filename}")
+    print(f"Gettng sha512sum for {filename}")
     h = hashlib.sha512()
     b = bytearray(128 * 1024)
     mv = memoryview(b)
@@ -94,13 +88,13 @@ def get_bundle(bundle: Path, outdir: Path, retry_attempts: int = 5):
     wait = random.randint(0, 7) * 600
     for a in range(retry_attempts):
         try:
-            logger.info(f"scp'ing bundle {bundle}: scp ranch.tacc.utexas.edu:{bundle} {str(outdir) + '/'}")
+            print(f"scp'ing bundle {bundle}: scp ranch.tacc.utexas.edu:{bundle} {str(outdir) + '/'}")
             subprocess.run(f"scp ranch.tacc.utexas.edu:{bundle} {str(outdir) + '/'}", shell=True, check=True)
-            logger.info(f"Successfully retrieved bundle: {bundle}")
+            print(f"Successfully retrieved bundle: {bundle}")
             break
         except subprocess.CalledProcessError as e:
-            logger.info(f"Retrieving bundled {bundle}  failed (attempt {a + 1}/{retry_attempts})")
-            logger.info(f"Error output: {e.stderr}")
+            print(f"Retrieving bundled {bundle}  failed (attempt {a + 1}/{retry_attempts})")
+            print(f"Error output: {e.stderr}")
             if a < (retry_attempts - 1):
                 print(f"Waiting 10 seconds")
                 time.sleep(10)
@@ -198,7 +192,7 @@ def get_bad_files(bad_files_path: Path) -> list[str]:
     return bad_files
 
 def check_i3_file(infile: Path) -> bool:
-    logger.info(f"Checking whether {infile} is a valid i3 file.")
+    print(f"Checking whether {infile} is a valid i3 file.")
     try:
         cmd = f"python3 {os.environ['I3_BUILD']}/dataio/resources/examples/scan.py -c {infile}"
         subprocess.run(cmd, shell=True)
@@ -210,7 +204,7 @@ def check_i3_file(infile: Path) -> bool:
         return True
 
 def check_gcd_file(gcdfile: Path) -> bool:
-    logger.info(f"Checking whether {gcdfile} is a good GCD file.")
+    print(f"Checking whether {gcdfile} is a good GCD file.")
     try:
         cmd = f"python3 /opt/pass3/scripts/icetray/step1/pass3_check_gcd.py -g {gcdfile} --corrections /opt/pass3/data/average_FADC_gain_bias_corrections.json"
         subprocess.run(cmd, shell=True)
@@ -238,13 +232,13 @@ def runner(infiles: tuple[Path, Path, Path, Path]) -> str:
     if not check_gcd_file(gcd):
         return f"GCD file {gcd} is not correct."
 
-    logger.info(f"Copying GCD file: {gcd}")
+    print(f"Copying GCD file: {gcd}")
     shutil.copy(gcd, tmpdir / gcd.name)
     local_gcd = tmpdir / gcd.name
 
     # Prepping files and file paths
     ## Extracting in file from bundle
-    logger.info(f"Extracting {infile}")
+    print(f"Extracting {infile}")
     zipfile.ZipFile(bundle).extract(str(infile), path=tmpdir)
     local_infile = tmpdir / infile
     if not local_infile.exists():
@@ -257,7 +251,7 @@ def runner(infiles: tuple[Path, Path, Path, Path]) -> str:
 
     if outfile.exists():
         if not check_i3_file(outfile):
-            logger.error(f"Output file {outfile} is not a valid i3 file.")
+            raise Exception(f"Output file {outfile} is not a valid i3 file.")
         return f"Output file {outfile} from bundle {bundle} already exists."
 
     local_stdout_file, local_stderr_file = get_logfilenames(infile,
@@ -307,14 +301,14 @@ def runner(infiles: tuple[Path, Path, Path, Path]) -> str:
         shutil.copy(local_stderr_file, stderr_file)
 
     # create checksum of output file
-    logger.info(f"Getting sha512sum for {local_outfile}")
+    print(f"Getting sha512sum for {local_outfile}")
     sha512sum = get_sha512sum(local_outfile)
-    logger.info(f"file: {local_outfile} sha512sum: {sha512sum}")
+    print(f"file: {local_outfile} sha512sum: {sha512sum}")
     with Path.open(str(outfile) + ".sha512sum", "w") as file:
         file.write(f"{outfile} {sha512sum}")
 
     # Copying from local dir to absolute dir
-    logger.info("Copying output file")
+    print("Copying output file")
     shutil.copy(local_outfile, outfile)
 
     sha512sum_final = get_sha512sum(outfile)
@@ -324,7 +318,7 @@ def runner(infiles: tuple[Path, Path, Path, Path]) -> str:
     if not check_i3_file(outfile):
         return f"ALERT: Output file {outfile} is not a valid i3 file."
 
-    logger.info("Copying moni files")
+    print("Copying moni files")
     shutil.copyfile(str(local_outfile) + ".npz", str(outfile) + ".npz")
     shutil.copyfile(str(local_outfile) + ".fadc_atwd_charge.npz",
                     str(outfile) + ".fadc_atwd_charge.npz")
@@ -341,7 +335,7 @@ def run_parallel(infiles, max_num=1):
         max_workers = max_num) as executor:
         futures = executor.map(runner, infiles)
         for f in futures:
-            logger.info(f)
+            print(f)
             if str(f).startswith("SUCCESS:"):
                  outfile = f.split(" ")[11]
                  checksum = f.split(" ")[-1][:-1]
@@ -399,9 +393,7 @@ if __name__ == "__main__":
     # os.environ['OPENBLAS_MAIN_FREE'] = str(1)
     # os.system(f'taskset -cp 0-{numcpus} {os.getpid()}')
 
-    logger.info(f"CPU count: {numcpus}")
-
-    logger.info(f"Processing {args.bundle}")
+    print(f"Processing {args.bundle}")
 
     if not Path("/cvmfs/icecube.opensciencegrid.org/data/photon-tables/splines/InfBareMu_mie_prob_z20a10_V2.fits").exists():
         raise FileNotFoundError("Cant find splines")
