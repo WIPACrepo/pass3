@@ -58,6 +58,7 @@ args = parser.parse_args()
 # prep the logging
 icetray.logging.console()
 icetray.I3Logger.global_logger.set_level(icetray.I3LogLevel.LOG_WARN)
+icetray.set_log_level_for_unit('I3Tray', icetray.I3LogLevel.LOG_TRACE)
 
 start_time = time.asctime()
 
