@@ -7,6 +7,8 @@ import math
 import json
 import argparse
 
+icetray.set_log_level_for_unit('I3Tray', icetray.I3LogLevel.LOG_TRACE)
+
 class CheckPass3GCDI3Module(I3ConditionalModule):
     """Sanity checker for GCD file used in Pass 3"""
     def __init__(self, context):
@@ -58,9 +60,9 @@ if __name__ == "__main__":
                         help="FADC gain correction JSON")
     args = parser.parse_args()
 
-    icetray.set_log_level_for_unit('I3Tray', icetray.I3LogLevel.LOG_TRACE)
-
     tray = I3Tray()
+
+    # icetray.set_log_level_for_unit('I3Tray', icetray.I3LogLevel.LOG_TRACE)
 
     tray.Add(dataio.I3Reader, "reader", FilenameList=[args.GCD])
 
