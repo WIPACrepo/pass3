@@ -376,7 +376,7 @@ async def post_filecatalog(file: Path, checksum: str, client_secret: str):
     }
     await client.request('POST', '/api/files', data)
 
-def run_parallel(infiles, filecatalogsecret, max_num=1):
+def run_parallel(infiles, filecatalogsecret=None, max_num=1):
     success = { str(infiles[0][1]): [] }
     files_to_be_processed = copy.copy([infiles[2] for i in infiles])
     with concurrent.futures.ProcessPoolExecutor(
@@ -388,9 +388,10 @@ def run_parallel(infiles, filecatalogsecret, max_num=1):
                 success[str(infiles[0][1])].append({
                     "file": f["outfile"]["name"],
                     "checksum": f["outfile"]["sha512sum"]})
-                post_filecatalog(Path(f["outfile"]["name"]), 
-                                 f["outfile"]["sha512sum"],
-                                 filecatalogsecret)
+                if filecatalogsecret:
+                    post_filecatalog(Path(f["outfile"]["name"]),
+                                    f["outfile"]["sha512sum"],
+                                    filecatalogsecret)
                 files_to_be_processed.remove(f["infile"])
     with open( str(infiles[0][3] / infiles[0][1].name) + ".json", "w") as f:
         json.dump(success, f, indent=4, sort_keys=True)
@@ -436,8 +437,8 @@ if __name__ == "__main__":
                         help="transfer bundle from tape",
                         action='store_true')
     parser.add_argument("--filecatalogsecret",
-                        type=str,
-                        required=True)
+                        type=nullable_string,
+                        required=False)
     args=parser.parse_args()
 
     if args.maxnumcpus == 0:
