@@ -53,10 +53,10 @@ def write_slurm_file(file: Path,
             f.write(f"\n")
 
 def get_year_filepath(file_path: str) -> str:
-    return str(file_path).split("/")[9]
+    return str(file_path).split("/")[-5]
 
 def get_date_filepath(file_path: str) -> str:
-    return str(file_path).split("/")[12]
+    return str(file_path).split("/")[-2]
 
 def write_srun_multiprog(file: Path,
                          bundles: defaultdict[Path],
