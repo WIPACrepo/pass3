@@ -13,7 +13,7 @@ import concurrent.futures
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Union
-from rest_tools.client import ClientCredentials
+from rest_tools.client import ClientCredentialsAuth
 
 
 def remove_extension(path: Path) -> Path:
@@ -329,7 +329,7 @@ def get_date_filepath(file_path: str) -> str:
     return str(file_path).split("/")[-2]
 
 async def post_filecatalog(file: Path, checksum: str, client_secret: str):
-    client = ClientCredentials(
+    client = ClientCredentialsAuth(
         address="https://file-catalog.icecube.aq",
         token_url="https://keycloak.icecube.aq",
         client_id="pass3-briedel",
@@ -338,7 +338,7 @@ async def post_filecatalog(file: Path, checksum: str, client_secret: str):
 
     year = get_year_filepath(file)
     MMDD = get_date_filepath(file)
-    time_str = datetime.utcfromtimestamp(file.stat().st_mtime).strftime("%Y-%m-%d %H:%M:%S")
+    time_str = datetime.fromtimestamp(file.stat().st_mtime).strftime("%Y-%m-%d %H:%M:%S")
     data = {
         "logical_name": f"/data/exp/IceCube/{year}/unbiased/PFDST/{MMDD}/{file.name}",
         "checksum": f"{checksum}",
@@ -375,7 +375,6 @@ def run_parallel(infiles, filecatalogsecret: str | None = None, max_num: int = 1
     json_path = infiles[0][3] / (infiles[0][1].name + ".json")
     with json_path.open("w") as fh:
         json.dump(success, fh, indent=4, sort_keys=True)
-
     if files_to_be_processed:
         raise Exception(f"Did not finish {files_to_be_processed}")
     return success

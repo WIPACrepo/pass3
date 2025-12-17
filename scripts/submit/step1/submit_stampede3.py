@@ -70,6 +70,7 @@ def write_srun_multiprog(file: Path,
                          env_shell: Path,
                          badfiles: Path,
                          numnodes: int,
+                         filecatalogsecret: str,
                          script: Path = Path("/opt/pass3/scripts/icetray/step1/run_step1.py"),
                          ) -> NoReturn:
     file = file.parent / (file.name + str(increment))
@@ -88,7 +89,8 @@ def write_srun_multiprog(file: Path,
             f.write(f"python3 {script} --bundle {bundle} --gcddir {gcddir} ")
             f.write(f"--outdir {outdir}/{year}/{date} --checksum {checksum} ")
             f.write(f"--scratchdir {scratchdir} --grl {grl} ")
-            f.write(f"--badfiles {badfiles}")
+            f.write(f"--badfiles {badfiles} ")
+            f.write(f"--filecatalogsecret {filecatalogsecret}")
             if numcores != 0:
                 f.write(f" --maxnumcpus {numcores}")
             f.write(f"\n")
@@ -245,6 +247,10 @@ if __name__ == "__main__":
                         type=Path,
                         required=False
                         )
+    parser.add_argument("--filecatalogsecret",
+                        help="client secret for file catalog",
+                        type=str,
+                        required=True)
     args=parser.parse_args()
 
     env_shell = Path(f"/cvmfs/icecube.opensciencegrid.org/py3-v4.4.2/RHEL_9_{args.cpuarch}/metaprojects/icetray/v1.16.0/bin/icetray-shell")
@@ -270,7 +276,8 @@ if __name__ == "__main__":
             args.grl,
             env_shell,
             args.badfiles,
-            args.numnodes)
+            args.numnodes,
+            args.filecatalogsecret)
 
     write_slurm_file(args.submitfile,
                     args.slurmqueue,
