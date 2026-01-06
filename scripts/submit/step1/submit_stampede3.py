@@ -154,8 +154,8 @@ def get_checksums_bundles(file_path: Path,
         raise Exception(f"Number of nodes {numnodes} has to be >= 1")
     bundle_names = [b.name for b in bundles]
     tmp_checksums = get_file_checksums(file_path)
-    filtered_checksum = { key: value for key, value in tmp_checksums.items() 
-                         if key.name in bundle_names}
+    filtered_checksum = sort({ key: value for key, value in tmp_checksums.items() 
+                         if key.name in bundle_names})
     if numnodes == 1:
         return [filtered_checksum]
     else:
@@ -253,7 +253,7 @@ if __name__ == "__main__":
                         required=True)
     args=parser.parse_args()
 
-    env_shell = Path(f"/cvmfs/icecube.opensciencegrid.org/py3-v4.4.2/RHEL_9_{args.cpuarch}/metaprojects/icetray/v1.16.0/bin/icetray-shell")
+    env_shell = Path(f"/cvmfs/icecube.opensciencegrid.org/py3-v4.4.2/RHEL_9_{args.cpuarch}/metaprojects/icetray/v1.17.0/bin/icetray-shell")
 
     if args.year != -1 and args.month != -1:
         checksums = get_checksum_year_month(args.checksum_file,
