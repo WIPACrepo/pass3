@@ -62,7 +62,7 @@ class FilterRateMonitorI3Module(I3ConditionalModule):
                     f.write(f"Filter: {afilter} Rate: {self.filter_cnt[afilter] / time_l} Hz\n")
             if "Keep_SuperDST_23" in self.filter_cnt.keys():
                 if (self.filter_cnt["Keep_SuperDST_23"] / time_l) <= 1300.:
-                    print("WARNING: Keep_SuperDST_23 rate is below 1300 Hz"
+                    print("WARNING: Keep_SuperDST_23 rate is below 1300 Hz")
         else:
             with Path.open(self.outfile, "w") as f:
                 print(self.start_time)
