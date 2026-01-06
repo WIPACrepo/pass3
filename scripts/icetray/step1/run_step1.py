@@ -145,6 +145,9 @@ def prepare_inputs(
     if len(infiles) == 0:
         raise FileNotFoundError(f"No input files found in bundle {bundle}")
 
+    with open(f"{outdir/bundle.name}.pfraw.contents.json", "w") as f:
+        json.dump({f"{bundle.name}": infiles}, f)
+
     inputs: list[tuple[Path, Path, Path, Path]] = []
     for f in infiles:
         try:
@@ -233,6 +236,11 @@ def runner(infiles: tuple[Path, Path, Path, Path]) -> dict:
     local_infile = tmpdir / infile
     if not local_infile.exists():
         raise FileNotFoundError("No Input File")
+
+    infile_sha512sum = get_sha512sum(local_infile)
+    print(f"Input file {local_infile} sha512 checksum {infile_sha512sum}")
+    with open(f"{outdir / infile}.sha512sum", "w") as fh:
+        fh.write(f"{infile} {infile_sha512sum}")
 
     outfilename = get_outfilename(infile)
     local_temp_outfile = tmpdir / ("tmp_" + str(outfilename.name))
@@ -331,7 +339,7 @@ def get_date_filepath(file_path: str) -> str:
 async def post_filecatalog(file: Path, checksum: str, client_secret: str):
     client = ClientCredentialsAuth(
         address="https://file-catalog.icecube.aq",
-        token_url="https://keycloak.icecube.aq",
+        token_url="https://keycloak.icecube.wisc.edu/auth/realms/IceCube",
         client_id="pass3-briedel",
         client_secret=client_secret,
     )
@@ -340,13 +348,15 @@ async def post_filecatalog(file: Path, checksum: str, client_secret: str):
     MMDD = get_date_filepath(file)
     time_str = datetime.fromtimestamp(file.stat().st_mtime).strftime("%Y-%m-%d %H:%M:%S")
     data = {
-        "logical_name": f"/data/exp/IceCube/{year}/unbiased/PFDST/{MMDD}/{file.name}",
-        "checksum": f"{checksum}",
+        "logical_name": f"/data/exp/IceCube/{year}/filtered/Pass3/Step1/{MMDD}/{file.name}",
+        "checksum": {"sha512": f"{checksum}"},
         "file_size": f"{file.stat().st_size}",
         "locations": [{"site": "TACC", "path": f"{file}"}],
         "create_date": f"{time_str}",
     }
-    await client.request("POST", "/api/files", data)
+    print(f"post {data} to file catalog")
+    return_val = await client.request("POST", "/api/files", data)
+    print(f"return from file catalog {return_val}")
 
 def run_parallel(infiles, filecatalogsecret: str | None = None, max_num: int = 1):
     if not infiles:
@@ -376,7 +386,7 @@ def run_parallel(infiles, filecatalogsecret: str | None = None, max_num: int = 1
     with json_path.open("w") as fh:
         json.dump(success, fh, indent=4, sort_keys=True)
     if files_to_be_processed:
-        raise Exception(f"Did not finish {files_to_be_processed}")
+        raise Exception(f"Did not finish {files_to_be_processed} from bundle {infiles[0][1]}")
     return success
 
 if __name__ == "__main__":
