@@ -16,6 +16,15 @@ from typing import Union
 from rest_tools.client import ClientCredentialsAuth
 
 
+def normalize_member_path(path: Union[str, Path]) -> str:
+    s = str(path).strip()
+    if s.startswith("./"):
+        s = s[2:]
+    if s.startswith("/"):
+        s = s[1:]
+    return s
+
+
 def remove_extension(path: Path) -> Path:
     """Remove multiple suffixes from filename."""
     suffixes = ''.join(path.suffixes)
@@ -100,6 +109,11 @@ def get_MMDD(bundle: Path) -> str:
     # /stornext/ranch_01/ranch/projects/TG-PHY150040/data/exp/IceCube/2022/unbiased/PFRaw/0131/e88990d2110611eea23ac29b9287f457.zip
     return str(bundle).split("/")[-2]
 
+
+def get_year_from_bundle(bundle: Path) -> str:
+    # /.../data/exp/IceCube/<YYYY>/unbiased/PFRaw/<MMDD>/<uuid>.zip
+    return str(bundle).split("/")[-5]
+
 def prepare_inputs(
     outdir: Path,
     scratchdir: Path,
@@ -108,11 +122,17 @@ def prepare_inputs(
     gcddir: Path,
     grl: list[int],
     bad_files: list[str],
+    duplicate_skip_members: set[str] | None = None,
     transfer_bundle: bool = False,
 ) -> list[tuple[Path, Path, Path, Path]]:
     outdir.mkdir(parents=True, exist_ok=True)
 
     MMDD = get_MMDD(bundle)
+    year = None
+    try:
+        year = get_year_from_bundle(bundle)
+    except Exception:
+        year = None
 
     if (scratchdir / bundle.name).exists():
         bundle_loc = scratchdir / bundle.name
@@ -122,6 +142,13 @@ def prepare_inputs(
         scratch_bundle_loc = bundle_loc
     elif (scratchdir / MMDD / bundle.name).exists():
         bundle_loc = scratchdir / MMDD / bundle.name
+        bundle_sha512sum = get_sha512sum(bundle_loc)
+        if bundle_sha512sum != checksum:
+            raise Exception(f"Bundle {bundle_loc} checksum is not what we expect")
+        scratch_bundle_loc = bundle_loc
+    elif year is not None and (scratchdir / year / MMDD / bundle.name).exists():
+        # Common local layout: <scratchdir>/<YYYY>/<MMDD>/<uuid>.zip
+        bundle_loc = scratchdir / year / MMDD / bundle.name
         bundle_sha512sum = get_sha512sum(bundle_loc)
         if bundle_sha512sum != checksum:
             raise Exception(f"Bundle {bundle_loc} checksum is not what we expect")
@@ -141,7 +168,20 @@ def prepare_inputs(
     else:
         raise FileExistsError(f"Bundle {bundle} does not exist in scratch dir {scratchdir} or provided path")
 
-    infiles = [f for f in zipfile.ZipFile(scratch_bundle_loc).namelist() if ".tar.gz" in f]
+    # Extract/copy any embedded *.ndjson manifest(s) into outdir
+    try:
+        with zipfile.ZipFile(scratch_bundle_loc) as zf:
+            ndjson_members = [n for n in zf.namelist() if n.lower().endswith(".ndjson")]
+            for member in sorted(ndjson_members):
+                dst = outdir / Path(member).name
+                # Avoid path traversal by writing using basename only
+                with zf.open(member) as src_fh, open(dst, "wb") as dst_fh:
+                    shutil.copyfileobj(src_fh, dst_fh)
+    except Exception as e:
+        print(f"Warning: could not extract ndjson manifest from {scratch_bundle_loc}: {e}")
+
+    with zipfile.ZipFile(scratch_bundle_loc) as zf:
+        infiles = [f for f in zf.namelist() if ".tar.gz" in f]
     if len(infiles) == 0:
         raise FileNotFoundError(f"No input files found in bundle {bundle}")
 
@@ -150,6 +190,9 @@ def prepare_inputs(
 
     inputs: list[tuple[Path, Path, Path, Path]] = []
     for f in infiles:
+        if duplicate_skip_members is not None:
+            if normalize_member_path(f) in duplicate_skip_members:
+                continue
         try:
             runnum = get_run_number(f)
         except ValueError:
@@ -358,7 +401,12 @@ async def post_filecatalog(file: Path, checksum: str, client_secret: str):
     return_val = await client.request("POST", "/api/files", data)
     print(f"return from file catalog {return_val}")
 
-def run_parallel(infiles, filecatalogsecret: str | None = None, max_num: int = 1):
+def run_parallel(
+    infiles,
+    filecatalogsecret: str | None = None,
+    publish_filecatalog: bool = False,
+    max_num: int = 1,
+):
     if not infiles:
         return {}
 
@@ -374,7 +422,7 @@ def run_parallel(infiles, filecatalogsecret: str | None = None, max_num: int = 1
                 outfile_path = res["outfile"]["path"]
                 checksum = res["outfile"]["sha512sum"]
                 success[bundle_key].append({"file": outfile_path, "checksum": checksum})
-                if filecatalogsecret:
+                if publish_filecatalog and filecatalogsecret:
                     try:
                         asyncio.run(post_filecatalog(Path(outfile_path), checksum, filecatalogsecret))
                     except Exception as e:
@@ -401,6 +449,17 @@ if __name__ == "__main__":
     parser.add_argument("--badfiles", help="known bad files list", type=Path, required=True)
     parser.add_argument("--transferbundle", help="transfer bundle from tape", action='store_true')
     parser.add_argument("--filecatalogsecret", type=str, required=False)
+    parser.add_argument(
+        "--publish-filecatalog",
+        help="Opt-in: publish produced files to the file-catalog service",
+        action="store_true",
+    )
+    parser.add_argument(
+        "--duplicate-skip-json",
+        help="Path to per-bundle JSON listing duplicate members to skip",
+        type=Path,
+        required=False,
+    )
     args = parser.parse_args()
 
     if args.maxnumcpus == 0:
@@ -420,6 +479,16 @@ if __name__ == "__main__":
     grl = get_grl(args.grl)
     badfiles = get_bad_files(args.badfiles)
 
+    duplicate_skip_members: set[str] | None = None
+    if args.duplicate_skip_json is not None:
+        try:
+            payload = json.loads(args.duplicate_skip_json.read_text())
+            members = payload.get("skip_members", []) if isinstance(payload, dict) else []
+            duplicate_skip_members = {normalize_member_path(m) for m in members}
+            print(f"Loaded {len(duplicate_skip_members)} duplicate members to skip")
+        except Exception as e:
+            raise RuntimeError(f"Failed to read duplicate skip json {args.duplicate_skip_json}: {e}")
+
     inputs = prepare_inputs(args.outdir,
                             args.scratchdir,
                             args.bundle,
@@ -427,9 +496,10 @@ if __name__ == "__main__":
                             args.gcddir,
                             grl,
                             badfiles,
+                            duplicate_skip_members,
                             args.transferbundle)
 
-    run_parallel(inputs, args.filecatalogsecret, numcpus)
+    run_parallel(inputs, args.filecatalogsecret, args.publish_filecatalog, numcpus)
 
     # TODO: Delete bundle
     # shutil.rmtree(args.bundle)
