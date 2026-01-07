@@ -467,6 +467,16 @@ if __name__ == "__main__":
         type=Path,
         required=False,
     )
+    parser.add_argument(
+        "--duplicate-skip-dir",
+        help=(
+            "Directory to write per-bundle duplicate-skip JSON files. "
+            "If omitted, writes to --outdir/YYYY/MMDD. "
+            "Use e.g. $(dirname --submitfile) to keep them with the submit scripts."
+        ),
+        type=Path,
+        required=False,
+    )
     parser.add_argument("--bundles",
                         help="a list of bundles to process",
                         nargs='+',
@@ -504,7 +514,10 @@ if __name__ == "__main__":
     for bundle, payload in duplicate_skip_payload.items():
         year = get_year_filepath(str(bundle))
         date = get_date_filepath(str(bundle))
-        outdir_bundle = args.outdir / year / date
+        if args.duplicate_skip_dir is not None:
+            outdir_bundle = args.duplicate_skip_dir
+        else:
+            outdir_bundle = args.outdir / year / date
         outdir_bundle.mkdir(parents=True, exist_ok=True)
         out_json = outdir_bundle / f"{bundle.name}.duplicate_skip.json"
         with out_json.open("w") as fh:
