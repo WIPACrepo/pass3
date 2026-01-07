@@ -6,7 +6,7 @@ import random
 import zipfile
 from datetime import datetime, timezone
 
-from typing import NoReturn
+from typing import NoReturn, Optional, Dict, Tuple, List
 from pathlib import Path
 from collections import defaultdict
 from itertools import islice
@@ -23,7 +23,7 @@ def normalize_member_path(path: str) -> str:
     return path
 
 
-def resolve_local_bundle_path(archive_bundle: Path, bundledir: Path | None) -> Path:
+def resolve_local_bundle_path(archive_bundle: Path, bundledir: Optional[Path]) -> Path:
     """Resolve an archive-path bundle to a local file path.
 
     If the archive_bundle already exists locally, it is returned.
@@ -108,7 +108,7 @@ def _read_ndjson_manifest(path: Path) -> list[str]:
     return _extract_members_from_manifest_text(path.read_text())
 
 
-def _read_manifest_from_zip(bundle: Path) -> tuple[str, str] | None:
+def _read_manifest_from_zip(bundle: Path) -> Optional[Tuple[str, str]]:
     """Return (manifest_text, manifest_member_name) if a *.ndjson exists in the zip."""
     try:
         with zipfile.ZipFile(bundle) as zf:
@@ -123,7 +123,7 @@ def _read_manifest_from_zip(bundle: Path) -> tuple[str, str] | None:
         return None
 
 
-def find_bundle_manifest(bundle: Path) -> Path | None:
+def find_bundle_manifest(bundle: Path) -> Optional[Path]:
     """Find a sidecar manifest for a bundle.
 
     We try the most common convention: <bundle>.ndjson (i.e. .zip -> .ndjson)
@@ -147,7 +147,7 @@ def find_bundle_manifest(bundle: Path) -> Path | None:
     return candidates[0]
 
 
-def get_bundle_manifest_members(bundle: Path) -> tuple[list[str], str | None]:
+def get_bundle_manifest_members(bundle: Path) -> Tuple[List[str], Optional[str]]:
     """Return (members, source).
 
     source is one of:
@@ -173,7 +173,7 @@ def get_bundle_manifest_members(bundle: Path) -> tuple[list[str], str | None]:
 
 def compute_duplicate_skip_lists(
     bundles: list[Path],
-    local_bundle_by_archive: dict[Path, Path] | None = None,
+    local_bundle_by_archive: Optional[Dict[Path, Path]] = None,
 ) -> dict[Path, dict[str, object]]:
     """Compute which files should be skipped for each bundle due to duplicates.
 
@@ -182,7 +182,7 @@ def compute_duplicate_skip_lists(
     """
     winner_for_member: dict[str, Path] = {}
     dupes_for_bundle: dict[Path, list[str]] = {b: [] for b in bundles}
-    source_for_bundle: dict[Path, str | None] = {b: None for b in bundles}
+    source_for_bundle: Dict[Path, Optional[str]] = {b: None for b in bundles}
 
     for bundle in sorted(bundles, key=lambda p: str(p)):
         local_bundle = local_bundle_by_archive.get(bundle, bundle) if local_bundle_by_archive else bundle
@@ -276,9 +276,9 @@ def write_srun_multiprog(file: Path,
                          badfiles: Path,
                          numnodes: int,
                          filecatalogsecret: str,
-                         duplicate_skip_json_by_bundle: dict[Path, Path] | None = None,
+                         duplicate_skip_json_by_bundle: Optional[Dict[Path, Path]] = None,
                          transferbundles: bool = False,
-                         local_bundle_by_archive: dict[Path, Path] | None = None,
+                         local_bundle_by_archive: Optional[Dict[Path, Path]] = None,
                          script: Path = Path("/opt/pass3/scripts/icetray/step1/run_step1.py"),
                          ) -> NoReturn:
     file = file.parent / (file.name + str(increment))
