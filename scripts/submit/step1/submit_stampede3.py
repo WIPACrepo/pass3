@@ -23,6 +23,15 @@ def normalize_member_path(path: str) -> str:
     return path
 
 
+def member_key(member_path: str) -> str:
+    """Canonical key for duplicate detection.
+
+    User-requested behavior: use only the filename (no directories).
+    """
+    p = normalize_member_path(member_path)
+    return Path(p).name
+
+
 def resolve_local_bundle_path(archive_bundle: Path, bundledir: Optional[Path]) -> Path:
     """Resolve an archive-path bundle to a local file path.
 
@@ -61,7 +70,7 @@ def _extract_members_from_manifest_text(text: str) -> list[str]:
         try:
             data = json.loads(text)
             if isinstance(data, list):
-                return [normalize_member_path(str(x)) for x in data if str(x).strip()]
+                return [member_key(str(x)) for x in data if str(x).strip()]
         except Exception:
             pass
 
@@ -73,7 +82,7 @@ def _extract_members_from_manifest_text(text: str) -> list[str]:
         try:
             obj = json.loads(line)
         except Exception:
-            files.append(normalize_member_path(line))
+            files.append(member_key(line))
             continue
 
         if isinstance(obj, str):
@@ -84,15 +93,15 @@ def _extract_members_from_manifest_text(text: str) -> list[str]:
         if isinstance(obj, dict):
             # Your manifest format uses logical_name for members.
             if obj.get("logical_name"):
-                files.append(normalize_member_path(obj["logical_name"]))
+                files.append(member_key(obj["logical_name"]))
                 continue
             for key in ("file", "filename", "name", "path", "member", "archive_member"):
                 if key in obj and obj[key]:
-                    files.append(normalize_member_path(obj[key]))
+                    files.append(member_key(obj[key]))
                     break
             continue
 
-        files.append(normalize_member_path(str(obj)))
+        files.append(member_key(str(obj)))
 
     return [f for f in files if f]
 
@@ -471,8 +480,7 @@ if __name__ == "__main__":
         "--duplicate-skip-dir",
         help=(
             "Directory to write per-bundle duplicate-skip JSON files. "
-            "If omitted, writes to --outdir/YYYY/MMDD. "
-            "Use e.g. $(dirname --submitfile) to keep them with the submit scripts."
+            "If omitted, writes next to --submitfile."
         ),
         type=Path,
         required=False,
@@ -512,12 +520,10 @@ if __name__ == "__main__":
 
     duplicate_skip_json_by_bundle: dict[Path, Path] = {}
     for bundle, payload in duplicate_skip_payload.items():
-        year = get_year_filepath(str(bundle))
-        date = get_date_filepath(str(bundle))
         if args.duplicate_skip_dir is not None:
             outdir_bundle = args.duplicate_skip_dir
         else:
-            outdir_bundle = args.outdir / year / date
+            outdir_bundle = args.submitfile.resolve().parent
         outdir_bundle.mkdir(parents=True, exist_ok=True)
         out_json = outdir_bundle / f"{bundle.name}.duplicate_skip.json"
         with out_json.open("w") as fh:

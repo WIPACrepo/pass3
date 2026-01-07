@@ -12,7 +12,7 @@ import asyncio
 import concurrent.futures
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Union
+from typing import Union, Optional, Set
 from rest_tools.client import ClientCredentialsAuth
 
 
@@ -22,7 +22,7 @@ def normalize_member_path(path: Union[str, Path]) -> str:
         s = s[2:]
     if s.startswith("/"):
         s = s[1:]
-    return s
+    return Path(s).name
 
 
 def remove_extension(path: Path) -> Path:
@@ -122,7 +122,7 @@ def prepare_inputs(
     gcddir: Path,
     grl: list[int],
     bad_files: list[str],
-    duplicate_skip_members: set[str] | None = None,
+    duplicate_skip_members: Optional[Set[str]] = None,
     transfer_bundle: bool = False,
 ) -> list[tuple[Path, Path, Path, Path]]:
     outdir.mkdir(parents=True, exist_ok=True)
@@ -403,7 +403,7 @@ async def post_filecatalog(file: Path, checksum: str, client_secret: str):
 
 def run_parallel(
     infiles,
-    filecatalogsecret: str | None = None,
+    filecatalogsecret: Optional[str] = None,
     publish_filecatalog: bool = False,
     max_num: int = 1,
 ):
@@ -479,7 +479,7 @@ if __name__ == "__main__":
     grl = get_grl(args.grl)
     badfiles = get_bad_files(args.badfiles)
 
-    duplicate_skip_members: set[str] | None = None
+    duplicate_skip_members: Optional[Set[str]] = None
     if args.duplicate_skip_json is not None:
         try:
             payload = json.loads(args.duplicate_skip_json.read_text())
