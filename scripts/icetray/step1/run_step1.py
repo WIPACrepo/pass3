@@ -379,7 +379,19 @@ def get_year_filepath(file_path: str) -> str:
 def get_date_filepath(file_path: str) -> str:
     return str(file_path).split("/")[-2]
 
-async def post_filecatalog(file: Path, checksum: str, client_secret: str):
+def get_data_into_filecatalog_format(file: Path, checksum: str) -> dict:
+    year = get_year_filepath(file)
+    MMDD = get_date_filepath(file)
+    time_str = datetime.fromtimestamp(file.stat().st_mtime).strftime("%Y-%m-%d %H:%M:%S")
+    return {
+        "logical_name": f"/data/exp/IceCube/{year}/filtered/Pass3/Step1/{MMDD}/{file.name}",
+        "checksum": {"sha512": f"{checksum}"},
+        "file_size": f"{file.stat().st_size}",
+        "locations": [{"site": "TACC", "path": f"{file}"}],
+        "create_date": f"{time_str}",
+    }
+
+async def post_filecatalog(data: dict, client_secret: str):
     client = ClientCredentialsAuth(
         address="https://file-catalog.icecube.aq",
         token_url="https://keycloak.icecube.wisc.edu/auth/realms/IceCube",
@@ -387,24 +399,13 @@ async def post_filecatalog(file: Path, checksum: str, client_secret: str):
         client_secret=client_secret,
     )
 
-    year = get_year_filepath(file)
-    MMDD = get_date_filepath(file)
-    time_str = datetime.fromtimestamp(file.stat().st_mtime).strftime("%Y-%m-%d %H:%M:%S")
-    data = {
-        "logical_name": f"/data/exp/IceCube/{year}/filtered/Pass3/Step1/{MMDD}/{file.name}",
-        "checksum": {"sha512": f"{checksum}"},
-        "file_size": f"{file.stat().st_size}",
-        "locations": [{"site": "TACC", "path": f"{file}"}],
-        "create_date": f"{time_str}",
-    }
     print(f"post {data} to file catalog")
     return_val = await client.request("POST", "/api/files", data)
     print(f"return from file catalog {return_val}")
+    return data
 
 def run_parallel(
     infiles,
-    filecatalogsecret: Optional[str] = None,
-    publish_filecatalog: bool = False,
     max_num: int = 1,
 ):
     if not infiles:
@@ -421,12 +422,13 @@ def run_parallel(
             if res.get("status") == "SUCCESS":
                 outfile_path = res["outfile"]["path"]
                 checksum = res["outfile"]["sha512sum"]
-                success[bundle_key].append({"file": outfile_path, "checksum": checksum})
-                if publish_filecatalog and filecatalogsecret:
-                    try:
-                        asyncio.run(post_filecatalog(Path(outfile_path), checksum, filecatalogsecret))
-                    except Exception as e:
-                        print(f"Warning: posting to filecatalog failed: {e}")
+                file_data = get_data_into_filecatalog_format(Path(outfile_path), checksum)
+                success[bundle_key].append(file_data)
+                # if publish_filecatalog and filecatalogsecret:
+                #     try:
+                #         asyncio.run(post_filecatalog(file_data, filecatalogsecret))
+                #     except Exception as e:
+                #         print(f"Warning: posting to filecatalog failed: {e}")
                 if res.get("infile") in files_to_be_processed:
                     files_to_be_processed.remove(res.get("infile"))
 
@@ -448,12 +450,6 @@ if __name__ == "__main__":
     parser.add_argument("--grl", help="good run list", type=Path, required=True)
     parser.add_argument("--badfiles", help="known bad files list", type=Path, required=True)
     parser.add_argument("--transferbundle", help="transfer bundle from tape", action='store_true')
-    parser.add_argument("--filecatalogsecret", type=str, required=False)
-    parser.add_argument(
-        "--publish-filecatalog",
-        help="Opt-in: publish produced files to the file-catalog service",
-        action="store_true",
-    )
     parser.add_argument(
         "--duplicate-skip-json",
         help="Path to per-bundle JSON listing duplicate members to skip",
@@ -499,7 +495,7 @@ if __name__ == "__main__":
                             duplicate_skip_members,
                             args.transferbundle)
 
-    run_parallel(inputs, args.filecatalogsecret, args.publish_filecatalog, numcpus)
+    run_parallel(inputs, numcpus)
 
     # TODO: Delete bundle
     # shutil.rmtree(args.bundle)
