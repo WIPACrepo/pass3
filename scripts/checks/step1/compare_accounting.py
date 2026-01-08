@@ -32,10 +32,10 @@ import sys
 import re
 from pathlib import Path
 from collections import defaultdict
-from typing import Dict, List, Set, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
 
-def extract_run_and_file_number(filename: str) -> Tuple[int, int] | None:
+def extract_run_and_file_number(filename: str) -> Optional[Tuple[int, int]]:
     """
     Extract run number and file number from filename.
     
