@@ -103,6 +103,27 @@ def load_input_accounting(input_ndjson_path: Path) -> Dict[Tuple[int, int], Dict
     return input_map
 
 
+def extract_input_bundle_uuid(input_ndjson_path: Path) -> Optional[str]:
+    """
+    Extract the bundle UUID from the first JSON object in the NDJSON file.
+    Falls back to None if unavailable.
+    """
+    with open(input_ndjson_path) as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                record = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            uuid_val = record.get("uuid")
+            if uuid_val:
+                return str(uuid_val)
+            break
+    return None
+
+
 def compare_accounting(output_map: Dict, input_map: Dict) -> Tuple[bool, Dict]:
     """
     Compare input and output accounting maps.
@@ -197,6 +218,14 @@ def main():
     
     print("Comparing accounting...", file=sys.stderr)
     is_valid, summary = compare_accounting(output_map, input_map)
+
+    # Derive bundle UUID from input NDJSON (if present)
+    bundle_uuid = extract_input_bundle_uuid(input_ndjson_path)
+    summary_filename = None
+    if bundle_uuid:
+        summary_filename = input_ndjson_path.parent / f"{bundle_uuid}.filecount.summary.json"
+    else:
+        summary_filename = input_ndjson_path.parent / f"{input_ndjson_path.stem}.filecount.summary.json"
     
     print("\n" + "="*60, file=sys.stderr)
     print("SUMMARY", file=sys.stderr)
@@ -219,6 +248,14 @@ def main():
     
     # Output summary as JSON to stdout
     print(json.dumps(summary, indent=2))
+
+    # Also write summary to file named with the bundle UUID (or input filename stem)
+    try:
+        with open(summary_filename, "w") as f:
+            json.dump(summary, f, indent=2)
+        print(f"Wrote summary to {summary_filename}", file=sys.stderr)
+    except Exception as e:
+        print(f"ERROR: Failed to write summary file {summary_filename}: {e}", file=sys.stderr)
     
     sys.exit(0 if is_valid else 1)
 
