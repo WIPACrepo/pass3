@@ -30,6 +30,36 @@ def remove_extension(path: Path) -> Path:
     suffixes = ''.join(path.suffixes)
     return Path(str(path).replace(suffixes, ''))
 
+def extract_manifest_checksums(bundle_zip_path: Path) -> dict[str, Optional[str]]:
+    """
+    Extract SHA512 checksums from ndjson manifest(s) inside the zip.
+    Returns a dict mapping member filename (basename) → sha512 (or None if not in manifest).
+    """
+    checksums = {}
+    try:
+        with zipfile.ZipFile(bundle_zip_path) as zf:
+            ndjson_members = [n for n in zf.namelist() if n.lower().endswith(".ndjson")]
+            for manifest_member in sorted(ndjson_members):
+                with zf.open(manifest_member) as f:
+                    for line in f:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        try:
+                            record = json.loads(line)
+                            logical_name = record.get("logical_name", "")
+                            checksum_obj = record.get("checksum", {})
+                            sha512 = checksum_obj.get("sha512") if isinstance(checksum_obj, dict) else None
+                            if logical_name and sha512:
+                                # Store by basename for matching with zip member names
+                                filename = Path(logical_name).name
+                                checksums[filename] = sha512
+                        except json.JSONDecodeError:
+                            continue
+    except Exception as e:
+        print(f"Warning: could not extract checksums from manifest in {bundle_zip_path}: {e}")
+    return checksums
+
 def get_gcd(infile: Path, gcddir: Path) -> Path:
     if not gcddir.exists():
         raise FileNotFoundError("No GCD dir")
@@ -188,7 +218,10 @@ def prepare_inputs(
     with open(f"{outdir/bundle.name}.pfraw.contents.json", "w") as f:
         json.dump({f"{bundle.name}": infiles}, f)
 
-    inputs: list[tuple[Path, Path, Path, Path]] = []
+    # Extract expected checksums from the manifest
+    manifest_checksums = extract_manifest_checksums(scratch_bundle_loc)
+
+    inputs: list[tuple[Path, Path, Path, Path, Optional[str]]] = []
     for f in infiles:
         if duplicate_skip_members is not None:
             if normalize_member_path(f) in duplicate_skip_members:
@@ -198,7 +231,10 @@ def prepare_inputs(
         except ValueError:
             continue
         if (runnum in grl) and (f not in bad_files):
-            inputs.append((Path(gcddir), Path(scratch_bundle_loc), Path(f), Path(outdir)))
+            # Get expected sha512 from manifest by matching basename
+            filename_basename = Path(f).name
+            expected_sha512 = manifest_checksums.get(filename_basename)
+            inputs.append((Path(gcddir), Path(scratch_bundle_loc), Path(f), Path(outdir), expected_sha512))
 
     return inputs
 
@@ -248,8 +284,8 @@ def check_gcd_file(gcdfile: Path) -> bool:
 def runner(infiles: tuple[Path, Path, Path, Path]) -> dict:
 
     # Getting file and file paths
-    # Tuple of 4 paths
-    # Each bundble can be a mix of runs so we need to grab the right GCD
+    # Tuple of 5 paths/values:
+    # Each bundle can be a mix of runs so we need to grab the right GCD
     # for each infile
     gcddir = infiles[0]
     # Location of the bundle
@@ -258,6 +294,8 @@ def runner(infiles: tuple[Path, Path, Path, Path]) -> dict:
     infile = infiles[2]
     # Where to put the output
     outdir = infiles[3]
+    # Expected SHA512 from manifest (or None)
+    expected_sha512 = infiles[4]
 
     # Creating a temporary working dir for this instance
     tmpdir = Path(tempfile.mkdtemp(dir=str(bundle.parent)))
@@ -273,20 +311,32 @@ def runner(infiles: tuple[Path, Path, Path, Path]) -> dict:
     local_gcd = tmpdir / gcd.name
 
     # Prepping files and file paths
-    ## Extracting in file from bundle
+    ## Extracting in file from bundle (stream copy, sanitized basename to avoid path traversal)
     print(f"Extracting {infile}")
-    zipfile.ZipFile(bundle).extract(str(infile), path=tmpdir)
-    local_infile = tmpdir / infile
+    with zipfile.ZipFile(bundle) as zf:
+        with zf.open(str(infile), "r") as src_fh, open(tmpdir / Path(infile).name, "wb") as dst_fh:
+            shutil.copyfileobj(src_fh, dst_fh)
+    local_infile = tmpdir / Path(infile).name
     if not local_infile.exists():
         raise FileNotFoundError("No Input File")
 
     infile_sha512sum = get_sha512sum(local_infile)
     print(f"Input file {local_infile} sha512 checksum {infile_sha512sum}")
-    with open(f"{outdir / infile}.sha512sum", "w") as fh:
-        fh.write(f"{infile} {infile_sha512sum}")
+
+    # Verify checksum against expected value from manifest
+    if expected_sha512 is not None:
+        if infile_sha512sum != expected_sha512:
+            print(f"ERROR: Checksum mismatch for {infile}!")
+            print(f"  Expected (from manifest): {expected_sha512}")
+            print(f"  Calculated (from file):   {infile_sha512sum}")
+            return {"status": "ERROR", "msg": f"Checksum mismatch for {infile}: expected {expected_sha512}, got {infile_sha512sum}"}
+        else:
+            print(f"Checksum verified: {infile_sha512sum} matches manifest")
+    else:
+        print(f"Warning: No expected checksum in manifest for {infile}")
 
     outfilename = get_outfilename(infile)
-    local_temp_outfile = tmpdir / ("tmp_" + str(outfilename.name))
+    # local_temp_outfile = tmpdir / ("tmp_" + str(outfilename.name))
     local_outfile = tmpdir / outfilename.name
     outfile = outdir / outfilename.name
 
@@ -391,19 +441,6 @@ def get_data_into_filecatalog_format(file: Path, checksum: str) -> dict:
         "create_date": f"{time_str}",
     }
 
-async def post_filecatalog(data: dict, client_secret: str):
-    client = ClientCredentialsAuth(
-        address="https://file-catalog.icecube.aq",
-        token_url="https://keycloak.icecube.wisc.edu/auth/realms/IceCube",
-        client_id="pass3-briedel",
-        client_secret=client_secret,
-    )
-
-    print(f"post {data} to file catalog")
-    return_val = await client.request("POST", "/api/files", data)
-    print(f"return from file catalog {return_val}")
-    return data
-
 def run_parallel(
     infiles,
     max_num: int = 1,
@@ -424,14 +461,8 @@ def run_parallel(
                 checksum = res["outfile"]["sha512sum"]
                 file_data = get_data_into_filecatalog_format(Path(outfile_path), checksum)
                 success[bundle_key].append(file_data)
-                # if publish_filecatalog and filecatalogsecret:
-                #     try:
-                #         asyncio.run(post_filecatalog(file_data, filecatalogsecret))
-                #     except Exception as e:
-                #         print(f"Warning: posting to filecatalog failed: {e}")
                 if res.get("infile") in files_to_be_processed:
                     files_to_be_processed.remove(res.get("infile"))
-
     json_path = infiles[0][3] / (infiles[0][1].name + ".json")
     with json_path.open("w") as fh:
         json.dump(success, fh, indent=4, sort_keys=True)
