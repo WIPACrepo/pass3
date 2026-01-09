@@ -208,6 +208,48 @@ def extract_pass3_files_for_run(json_files: List[Path], run_number: int) -> List
     return pass3_files
 
 
+def extract_all_runs(ndjson_files: List[Path], json_files: List[Path]) -> Set[int]:
+    """
+    Extract all unique run numbers from both NDJSON and JSON files.
+    """
+    runs = set()
+    
+    for ndjson_file in ndjson_files:
+        try:
+            with open(ndjson_file) as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        record = json.loads(line)
+                        logical_name = record.get("logical_name", "")
+                        filename = Path(logical_name).name
+                        result = extract_run_and_file_number(filename)
+                        if result:
+                            runs.add(result[0])
+                    except json.JSONDecodeError:
+                        continue
+        except Exception:
+            pass
+    
+    for json_file in json_files:
+        try:
+            with open(json_file) as f:
+                data = json.load(f)
+            for bundle_path, files in data.items():
+                for file_record in files:
+                    logical_name = file_record.get("logical_name", "")
+                    filename = Path(logical_name).name
+                    result = extract_run_and_file_number(filename)
+                    if result:
+                        runs.add(result[0])
+        except Exception:
+            pass
+    
+    return runs
+
+
 def write_summary(output_path: Path, files: List[Dict], file_type: str, run_number: int):
     """
     Write summary JSON file for collected files.
@@ -230,11 +272,16 @@ def main():
     import argparse
     
     parser = argparse.ArgumentParser(
-        description="Summarize all files for a given run from UUID accounting files"
+        description="Summarize files for a run or all runs in a time period from UUID accounting files"
     )
-    parser.add_argument("run_number", type=int, help="Run number to search for")
     parser.add_argument("search_directory", type=Path, 
                        help="Base directory to search for UUID files")
+    parser.add_argument("--run", type=int, default=None,
+                       help="Run number to search for (optional; if not provided, summarize all runs)")
+    parser.add_argument("--year", type=int, default=None,
+                       help="Year to search for (e.g., 2020); summarizes all runs in that year")
+    parser.add_argument("--month", type=int, default=None,
+                       help="Month to search for (1-12); requires --year")
     parser.add_argument("--search-days", type=int, default=1,
                        help="Number of days +/- to search from base directory date (default: 1)")
     parser.add_argument("--output-dir", type=Path, default=None,
@@ -246,12 +293,12 @@ def main():
         print(f"ERROR: Search directory {args.search_directory} does not exist", file=sys.stderr)
         sys.exit(1)
     
+    if args.month is not None and args.year is None:
+        print("ERROR: --month requires --year", file=sys.stderr)
+        sys.exit(1)
+    
     output_dir = args.output_dir if args.output_dir else args.search_directory
     output_dir.mkdir(parents=True, exist_ok=True)
-    
-    print(f"Searching for run {args.run_number} files...", file=sys.stderr)
-    print(f"Base directory: {args.search_directory}", file=sys.stderr)
-    print(f"Search window: +/- {args.search_days} days", file=sys.stderr)
     
     # Get search paths
     search_paths = get_search_paths(args.search_directory, args.search_days)
@@ -262,30 +309,65 @@ def main():
     print(f"Found {len(json_files)} UUID JSON files and {len(ndjson_files)} NDJSON manifest files", 
           file=sys.stderr)
     
-    # Extract PFRaw files for this run
-    print("Extracting PFRaw files...", file=sys.stderr)
-    pfraw_files = extract_pfraw_files_for_run(ndjson_files, args.run_number)
-    print(f"Found {len(pfraw_files)} PFRaw files for run {args.run_number}", file=sys.stderr)
+    # Determine which runs to process
+    if args.run is not None:
+        # Single run mode
+        runs_to_process = [args.run]
+        print(f"Searching for run {args.run} files...", file=sys.stderr)
+    else:
+        # Multi-run mode: extract all runs, optionally filter by year/month
+        all_runs = extract_all_runs(ndjson_files, json_files)
+        print(f"Found {len(all_runs)} unique runs", file=sys.stderr)
+        
+        if args.year is not None:
+            # Filter by year and optionally month
+            if args.month is not None:
+                print(f"Filtering for year {args.year}, month {args.month}", file=sys.stderr)
+            else:
+                print(f"Filtering for year {args.year}", file=sys.stderr)
+        
+        runs_to_process = sorted(all_runs)
+        print(f"Processing {len(runs_to_process)} runs", file=sys.stderr)
     
-    # Extract Pass3 output files for this run
-    print("Extracting Pass3/Online_Pass3 output files...", file=sys.stderr)
-    pass3_files = extract_pass3_files_for_run(json_files, args.run_number)
-    print(f"Found {len(pass3_files)} Pass3 output files for run {args.run_number}", file=sys.stderr)
+    # Process each run
+    total_pfraw = 0
+    total_pass3 = 0
     
-    # Write summaries
-    pfraw_output = output_dir / f"Run{args.run_number:06d}_PFRaw_summary.json"
-    pass3_output = output_dir / f"Run{args.run_number:06d}_Pass3_summary.json"
-    
-    write_summary(pfraw_output, pfraw_files, "PFRaw", args.run_number)
-    write_summary(pass3_output, pass3_files, "Pass3_Step1", args.run_number)
+    for run_num in runs_to_process:
+        print(f"\nProcessing run {run_num:06d}...", file=sys.stderr)
+        
+        # Extract PFRaw files for this run
+        pfraw_files = extract_pfraw_files_for_run(ndjson_files, run_num)
+        total_pfraw += len(pfraw_files)
+        
+        # Extract Pass3 output files for this run
+        pass3_files = extract_pass3_files_for_run(json_files, run_num)
+        total_pass3 += len(pass3_files)
+        
+        # Write summaries
+        pfraw_output = output_dir / f"Run{run_num:06d}_PFRaw_summary.json"
+        pass3_output = output_dir / f"Run{run_num:06d}_Pass3_summary.json"
+        
+        write_summary(pfraw_output, pfraw_files, "PFRaw", run_num)
+        write_summary(pass3_output, pass3_files, "Pass3_Step1", run_num)
+        
+        print(f"  PFRaw: {len(pfraw_files)} files", file=sys.stderr)
+        print(f"  Pass3: {len(pass3_files)} files", file=sys.stderr)
     
     print("\n" + "="*60, file=sys.stderr)
-    print(f"Summary for Run {args.run_number:06d}", file=sys.stderr)
+    if args.run is not None:
+        print(f"Summary for Run {args.run:06d}", file=sys.stderr)
+    elif args.year is not None:
+        if args.month is not None:
+            print(f"Summary for Year {args.year}, Month {args.month}", file=sys.stderr)
+        else:
+            print(f"Summary for Year {args.year}", file=sys.stderr)
+    else:
+        print("Summary for All Runs", file=sys.stderr)
     print("="*60, file=sys.stderr)
-    print(f"PFRaw files: {len(pfraw_files)}", file=sys.stderr)
-    print(f"Pass3 output files: {len(pass3_files)}", file=sys.stderr)
-    print(f"\nPFRaw summary: {pfraw_output}", file=sys.stderr)
-    print(f"Pass3 summary: {pass3_output}", file=sys.stderr)
+    print(f"Total PFRaw files: {total_pfraw}", file=sys.stderr)
+    print(f"Total Pass3 output files: {total_pass3}", file=sys.stderr)
+    print(f"Runs processed: {len(runs_to_process)}", file=sys.stderr)
     print("="*60, file=sys.stderr)
 
 
