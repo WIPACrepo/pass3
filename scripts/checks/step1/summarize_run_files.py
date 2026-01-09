@@ -71,10 +71,18 @@ def get_search_paths(base_dir: Path, search_days: int = 1, year: Optional[int] =
         search_paths = []
         _, num_days = calendar.monthrange(year, month)
         
+        # Check if base_dir already contains the year in its path
+        base_dir_str = str(base_dir)
+        if str(year) in base_dir_str:
+            # base_dir already includes the year; append MMDD directly
+            year_dir = base_dir
+        else:
+            # base_dir doesn't include year; append year first
+            year_dir = base_dir / str(year)
+        
         for day in range(1, num_days + 1):
             mmdd = f"{month:02d}{day:02d}"
-            # Try to construct path with year/mmdd
-            candidate_path = base_dir / str(year) / mmdd
+            candidate_path = year_dir / mmdd
             if candidate_path.exists():
                 search_paths.append(candidate_path)
         
@@ -86,10 +94,16 @@ def get_search_paths(base_dir: Path, search_days: int = 1, year: Optional[int] =
     # If year is provided (but not month), search entire year
     if year is not None:
         search_paths = []
-        year_path = base_dir / str(year)
-        if year_path.exists():
+        # Check if base_dir already contains the year in its path
+        base_dir_str = str(base_dir)
+        if str(year) in base_dir_str:
+            year_dir = base_dir
+        else:
+            year_dir = base_dir / str(year)
+        
+        if year_dir.exists():
             # Recursively search all subdirectories under year
-            for mmdd_path in sorted(year_path.glob("*")):
+            for mmdd_path in sorted(year_dir.glob("*")):
                 if mmdd_path.is_dir():
                     search_paths.append(mmdd_path)
         if search_paths:
@@ -319,6 +333,8 @@ def main():
                        help="Number of days +/- to search from base directory date (default: 1)")
     parser.add_argument("--output-dir", type=Path, default=None,
                        help="Directory to write summary files (default: search_directory)")
+    parser.add_argument("--combined-output", type=str, default=None,
+                       help="Write combined output to single file instead of per-run files (e.g., 'all_runs_summary.json')")
     
     args = parser.parse_args()
     
@@ -366,6 +382,10 @@ def main():
     total_pfraw = 0
     total_pass3 = 0
     
+    # Collect data for combined output if requested
+    combined_pfraw = {} if args.combined_output else None
+    combined_pass3 = {} if args.combined_output else None
+    
     for run_num in runs_to_process:
         print(f"\nProcessing run {run_num:06d}...", file=sys.stderr)
         
@@ -377,15 +397,57 @@ def main():
         pass3_files = extract_pass3_files_for_run(json_files, run_num)
         total_pass3 += len(pass3_files)
         
-        # Write summaries
-        pfraw_output = output_dir / f"Run{run_num:06d}_PFRaw_summary.json"
-        pass3_output = output_dir / f"Run{run_num:06d}_Pass3_summary.json"
-        
-        write_summary(pfraw_output, pfraw_files, "PFRaw", run_num)
-        write_summary(pass3_output, pass3_files, "Pass3_Step1", run_num)
+        if args.combined_output:
+            # Collect data for combined output
+            combined_pfraw[run_num] = {
+                "run_number": run_num,
+                "total_files": len(pfraw_files),
+                "files": sorted(pfraw_files, key=lambda x: extract_run_and_file_number(Path(x.get("logical_name", "")).name)[1] 
+                               if extract_run_and_file_number(Path(x.get("logical_name", "")).name) else 0)
+            }
+            combined_pass3[run_num] = {
+                "run_number": run_num,
+                "total_files": len(pass3_files),
+                "files": sorted(pass3_files, key=lambda x: extract_run_and_file_number(Path(x.get("logical_name", "")).name)[1] 
+                               if extract_run_and_file_number(Path(x.get("logical_name", "")).name) else 0)
+            }
+        else:
+            # Write individual summaries
+            pfraw_output = output_dir / f"Run{run_num:06d}_PFRaw_summary.json"
+            pass3_output = output_dir / f"Run{run_num:06d}_Pass3_summary.json"
+            
+            write_summary(pfraw_output, pfraw_files, "PFRaw", run_num)
+            write_summary(pass3_output, pass3_files, "Pass3_Step1", run_num)
         
         print(f"  PFRaw: {len(pfraw_files)} files", file=sys.stderr)
         print(f"  Pass3: {len(pass3_files)} files", file=sys.stderr)
+    
+    # Write combined output if requested
+    if args.combined_output:
+        combined_pfraw_output = output_dir / f"{args.combined_output}_PFRaw.json"
+        combined_pass3_output = output_dir / f"{args.combined_output}_Pass3.json"
+        
+        combined_pfraw_summary = {
+            "file_type": "PFRaw",
+            "total_runs": len(runs_to_process),
+            "total_files": total_pfraw,
+            "runs": [combined_pfraw[run] for run in sorted(combined_pfraw.keys())]
+        }
+        
+        combined_pass3_summary = {
+            "file_type": "Pass3_Step1",
+            "total_runs": len(runs_to_process),
+            "total_files": total_pass3,
+            "runs": [combined_pass3[run] for run in sorted(combined_pass3.keys())]
+        }
+        
+        with open(combined_pfraw_output, "w") as f:
+            json.dump(combined_pfraw_summary, f, indent=2)
+        print(f"Wrote combined PFRaw summary to {combined_pfraw_output}", file=sys.stderr)
+        
+        with open(combined_pass3_output, "w") as f:
+            json.dump(combined_pass3_summary, f, indent=2)
+        print(f"Wrote combined Pass3 summary to {combined_pass3_output}", file=sys.stderr)
     
     print("\n" + "="*60, file=sys.stderr)
     if args.run is not None:
