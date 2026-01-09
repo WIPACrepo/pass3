@@ -58,12 +58,45 @@ def parse_date_from_path(path: Path) -> Optional[datetime]:
     return None
 
 
-def get_search_paths(base_dir: Path, search_days: int = 1) -> List[Path]:
+def get_search_paths(base_dir: Path, search_days: int = 1, year: Optional[int] = None, month: Optional[int] = None) -> List[Path]:
     """
     Generate list of directories to search based on base_dir and +/- search_days.
     If base_dir contains a date pattern (YYYY/MMDD), search nearby dates.
+    If year and month are provided, search all MMDD directories for that month.
     Otherwise, just return base_dir and recursively search.
     """
+    # If year and month are provided, search all days in that month
+    if year is not None and month is not None:
+        import calendar
+        search_paths = []
+        _, num_days = calendar.monthrange(year, month)
+        
+        for day in range(1, num_days + 1):
+            mmdd = f"{month:02d}{day:02d}"
+            # Try to construct path with year/mmdd
+            candidate_path = base_dir / str(year) / mmdd
+            if candidate_path.exists():
+                search_paths.append(candidate_path)
+        
+        if search_paths:
+            return search_paths
+        # Fallback if no matching paths found
+        return [base_dir]
+    
+    # If year is provided (but not month), search entire year
+    if year is not None:
+        search_paths = []
+        year_path = base_dir / str(year)
+        if year_path.exists():
+            # Recursively search all subdirectories under year
+            for mmdd_path in sorted(year_path.glob("*")):
+                if mmdd_path.is_dir():
+                    search_paths.append(mmdd_path)
+        if search_paths:
+            return search_paths
+        return [base_dir]
+    
+    # Original logic: date-based search with +/- days
     base_date = parse_date_from_path(base_dir)
     
     if base_date is None:
@@ -300,8 +333,8 @@ def main():
     output_dir = args.output_dir if args.output_dir else args.search_directory
     output_dir.mkdir(parents=True, exist_ok=True)
     
-    # Get search paths
-    search_paths = get_search_paths(args.search_directory, args.search_days)
+    # Get search paths (pass year/month if provided)
+    search_paths = get_search_paths(args.search_directory, args.search_days, args.year, args.month)
     print(f"Search paths: {search_paths}", file=sys.stderr)
     
     # Find UUID files
