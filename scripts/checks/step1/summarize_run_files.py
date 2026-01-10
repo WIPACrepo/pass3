@@ -381,7 +381,8 @@ def main():
         print(f"Processing {len(runs_to_process)} runs", file=sys.stderr)
     
     # Process each run
-    total_pfraw = 0
+    total_pfraw = 0  # deduped count
+    total_pfraw_raw = 0  # raw count including duplicates
     total_pass3 = 0
     
     # Collect data for combined output if requested
@@ -397,21 +398,9 @@ def main():
         
         # Extract PFRaw files for this run
         pfraw_files = extract_pfraw_files_for_run(ndjson_files, run_num)
-        total_pfraw += len(pfraw_files)
-        
-        # Extract Pass3 output files for this run
-        pass3_files = extract_pass3_files_for_run(json_files, run_num)
-        total_pass3 += len(pass3_files)
-        
-        # Track count mismatches
-        if len(pfraw_files) != len(pass3_files):
-            runs_with_count_mismatch.append({
-                "run_number": run_num,
-                "pfraw_count": len(pfraw_files),
-                "pass3_count": len(pass3_files),
-            })
+        total_pfraw_raw += len(pfraw_files)
 
-        # Detect PFraw duplicates by file number
+        # Group by file number to detect duplicates and to deduplicate for counting
         file_groups = {}
         for rec in pfraw_files:
             fname = Path(rec.get("logical_name", "")).name
@@ -419,6 +408,30 @@ def main():
             if res:
                 fnum = res[1]
                 file_groups.setdefault(fnum, []).append(rec)
+
+        # Deduplicated PFraw list (first occurrence per file number)
+        dedup_pfraw_files = []
+        for fnum in sorted(file_groups.keys()):
+            recs = file_groups[fnum]
+            if recs:
+                dedup_pfraw_files.append(recs[0])
+        dedup_pfraw_count = len(dedup_pfraw_files)
+        total_pfraw += dedup_pfraw_count
+        
+        # Extract Pass3 output files for this run
+        pass3_files = extract_pass3_files_for_run(json_files, run_num)
+        total_pass3 += len(pass3_files)
+        
+        # Track count mismatches (using deduplicated PFraw count)
+        if dedup_pfraw_count != len(pass3_files):
+            runs_with_count_mismatch.append({
+                "run_number": run_num,
+                "pfraw_count": dedup_pfraw_count,
+                "pfraw_raw_count": len(pfraw_files),
+                "pass3_count": len(pass3_files),
+            })
+
+        # Detect PFraw duplicates by file number
         run_dups = []
         for fnum, recs in sorted(file_groups.items()):
             if len(recs) > 1:
@@ -437,8 +450,8 @@ def main():
             # Collect data for combined output
             combined_pfraw[run_num] = {
                 "run_number": run_num,
-                "total_files": len(pfraw_files),
-                "files": sorted(pfraw_files, key=lambda x: extract_run_and_file_number(Path(x.get("logical_name", "")).name)[1] 
+                "total_files": dedup_pfraw_count,
+                "files": sorted(dedup_pfraw_files, key=lambda x: extract_run_and_file_number(Path(x.get("logical_name", "")).name)[1] 
                                if extract_run_and_file_number(Path(x.get("logical_name", "")).name) else 0)
             }
             combined_pass3[run_num] = {
@@ -452,10 +465,10 @@ def main():
             pfraw_output = output_dir / f"Run{run_num:06d}_PFRaw_summary.json"
             pass3_output = output_dir / f"Run{run_num:06d}_Pass3_summary.json"
             
-            write_summary(pfraw_output, pfraw_files, "PFRaw", run_num)
+            write_summary(pfraw_output, dedup_pfraw_files, "PFRaw", run_num)
             write_summary(pass3_output, pass3_files, "Pass3_Step1", run_num)
-        
-        print(f"  PFRaw: {len(pfraw_files)} files", file=sys.stderr)
+
+        print(f"  PFRaw: {dedup_pfraw_count} files (deduped from {len(pfraw_files)})", file=sys.stderr)
         print(f"  Pass3: {len(pass3_files)} files", file=sys.stderr)
     
     # Write combined output if requested
@@ -493,6 +506,7 @@ def main():
         "runs_with_count_mismatch": runs_with_count_mismatch,
         "pfraw_duplicates": pfraw_duplicates_summary,
         "total_pfraw_files": total_pfraw,
+        "total_pfraw_files_raw": total_pfraw_raw,
         "total_pass3_files": total_pass3,
     }
     with open(validation_output_path, "w") as f:
@@ -510,7 +524,7 @@ def main():
     else:
         print("Summary for All Runs", file=sys.stderr)
     print("="*60, file=sys.stderr)
-    print(f"Total PFRaw files: {total_pfraw}", file=sys.stderr)
+    print(f"Total PFRaw files: {total_pfraw} (deduped from {total_pfraw_raw})", file=sys.stderr)
     print(f"Total Pass3 output files: {total_pass3}", file=sys.stderr)
     print(f"Runs processed: {len(runs_to_process)}", file=sys.stderr)
     print("="*60, file=sys.stderr)
