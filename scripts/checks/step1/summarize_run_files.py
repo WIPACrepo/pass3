@@ -335,6 +335,8 @@ def main():
                        help="Directory to write summary files (default: search_directory)")
     parser.add_argument("--combined-output", type=str, default=None,
                        help="Write combined output to single file instead of per-run files (e.g., 'all_runs_summary.json')")
+    parser.add_argument("--validation-output", type=str, default=None,
+                        help="Write a JSON file summarizing runs with PFraw vs Pass3 count mismatches and PFraw duplicates (default: runs_validation.json)")
     
     args = parser.parse_args()
     
@@ -386,6 +388,10 @@ def main():
     combined_pfraw = {} if args.combined_output else None
     combined_pass3 = {} if args.combined_output else None
     
+    # Validation: track count mismatches and PFraw duplicates
+    runs_with_count_mismatch = []
+    pfraw_duplicates_summary = []
+    
     for run_num in runs_to_process:
         print(f"\nProcessing run {run_num:06d}...", file=sys.stderr)
         
@@ -397,6 +403,36 @@ def main():
         pass3_files = extract_pass3_files_for_run(json_files, run_num)
         total_pass3 += len(pass3_files)
         
+        # Track count mismatches
+        if len(pfraw_files) != len(pass3_files):
+            runs_with_count_mismatch.append({
+                "run_number": run_num,
+                "pfraw_count": len(pfraw_files),
+                "pass3_count": len(pass3_files),
+            })
+
+        # Detect PFraw duplicates by file number
+        file_groups = {}
+        for rec in pfraw_files:
+            fname = Path(rec.get("logical_name", "")).name
+            res = extract_run_and_file_number(fname)
+            if res:
+                fnum = res[1]
+                file_groups.setdefault(fnum, []).append(rec)
+        run_dups = []
+        for fnum, recs in sorted(file_groups.items()):
+            if len(recs) > 1:
+                run_dups.append({
+                    "file_number": fnum,
+                    "occurrences": len(recs),
+                    "files": recs,
+                })
+        if run_dups:
+            pfraw_duplicates_summary.append({
+                "run_number": run_num,
+                "duplicates": run_dups,
+            })
+
         if args.combined_output:
             # Collect data for combined output
             combined_pfraw[run_num] = {
@@ -448,6 +484,20 @@ def main():
         with open(combined_pass3_output, "w") as f:
             json.dump(combined_pass3_summary, f, indent=2)
         print(f"Wrote combined Pass3 summary to {combined_pass3_output}", file=sys.stderr)
+
+    # Write validation summary (mismatches + duplicates)
+    validation_filename = args.validation_output if args.validation_output else "runs_validation"
+    validation_output_path = output_dir / f"{validation_filename}.json"
+    validation_summary = {
+        "runs_processed": len(runs_to_process),
+        "runs_with_count_mismatch": runs_with_count_mismatch,
+        "pfraw_duplicates": pfraw_duplicates_summary,
+        "total_pfraw_files": total_pfraw,
+        "total_pass3_files": total_pass3,
+    }
+    with open(validation_output_path, "w") as f:
+        json.dump(validation_summary, f, indent=2)
+    print(f"Wrote validation summary to {validation_output_path}", file=sys.stderr)
     
     print("\n" + "="*60, file=sys.stderr)
     if args.run is not None:
