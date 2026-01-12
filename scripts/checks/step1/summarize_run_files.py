@@ -297,6 +297,47 @@ def extract_all_runs(ndjson_files: List[Path], json_files: List[Path]) -> Set[in
     return runs
 
 
+def load_good_runs(good_runs_path: Path) -> Set[int]:
+    """
+    Load a list of good run numbers from a file.
+    Supports formats:
+    - One run number per line (plain text)
+    - JSON array of run numbers
+    
+    Returns set of run numbers.
+    """
+    good_runs = set()
+    
+    try:
+        with open(good_runs_path) as f:
+            content = f.read().strip()
+        
+        # Try JSON format first
+        try:
+            data = json.loads(content)
+            if isinstance(data, list):
+                good_runs = set(int(x) for x in data)
+                print(f"Loaded {len(good_runs)} good runs from JSON file {good_runs_path}", file=sys.stderr)
+                return good_runs
+        except json.JSONDecodeError:
+            pass
+        
+        # Fall back to plain text (one per line)
+        for line in content.split('\n'):
+            line = line.strip()
+            if line and not line.startswith('#'):
+                try:
+                    good_runs.add(int(line))
+                except ValueError:
+                    print(f"Warning: Could not parse run number from line: {line}", file=sys.stderr)
+        
+        print(f"Loaded {len(good_runs)} good runs from file {good_runs_path}", file=sys.stderr)
+        return good_runs
+    except Exception as e:
+        print(f"ERROR: Failed to load good runs from {good_runs_path}: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
 def write_summary(output_path: Path, files: List[Dict], file_type: str, run_number: int):
     """
     Write summary JSON file for collected files.
@@ -337,6 +378,8 @@ def main():
                        help="Write combined output to single file instead of per-run files (e.g., 'all_runs_summary.json')")
     parser.add_argument("--validation-output", type=str, default=None,
                         help="Write a JSON file summarizing runs with PFraw vs Pass3 count mismatches and PFraw duplicates (default: runs_validation.json)")
+    parser.add_argument("--good-runs", type=Path, default=None,
+                       help="Path to file containing list of good run numbers (one per line or JSON array); only process these runs")
     
     args = parser.parse_args()
     
@@ -347,6 +390,14 @@ def main():
     if args.month is not None and args.year is None:
         print("ERROR: --month requires --year", file=sys.stderr)
         sys.exit(1)
+    
+    # Load good runs list if provided
+    good_runs_filter = None
+    if args.good_runs is not None:
+        if not args.good_runs.exists():
+            print(f"ERROR: Good runs file {args.good_runs} does not exist", file=sys.stderr)
+            sys.exit(1)
+        good_runs_filter = load_good_runs(args.good_runs)
     
     output_dir = args.output_dir if args.output_dir else args.search_directory
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -378,6 +429,14 @@ def main():
                 print(f"Filtering for year {args.year}", file=sys.stderr)
         
         runs_to_process = sorted(all_runs)
+        
+        # Filter by good runs list if provided
+        if good_runs_filter is not None:
+            runs_before = len(runs_to_process)
+            runs_to_process = [r for r in runs_to_process if r in good_runs_filter]
+            runs_excluded = runs_before - len(runs_to_process)
+            print(f"Filtering by good runs list: {runs_excluded} runs excluded, {len(runs_to_process)} remain", file=sys.stderr)
+        
         print(f"Processing {len(runs_to_process)} runs", file=sys.stderr)
     
     # Process each run
