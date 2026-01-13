@@ -60,6 +60,19 @@ icetray.logging.console()
 icetray.I3Logger.global_logger.set_level(icetray.I3LogLevel.LOG_WARN)
 icetray.set_log_level_for_unit('I3Tray', icetray.I3LogLevel.LOG_TRACE)
 
+def reprocessing_remove_unfiltered_events(frame):
+    """
+    Check if the frame is an "unfiltered event", which should be skipped in reprocessing.
+
+    This is a safety check to prevent that the other events in the file are not processed.
+
+    Returns:
+    True if the frame is an unfiltered event and should be skipped, False otherwise.
+    """
+    if "I3EventHeader" in frame:
+        return True
+    return False
+
 start_time = time.asctime()
 
 gcd_path, gcd_filename = os.path.split(args.GCD)
@@ -98,6 +111,9 @@ if args.QIFY:
 # Started with a generated relatively random seed for it
 random_srvc = I3GSLRandomService(int.from_bytes(os.urandom(4), sys.byteorder))
 
+tray.AddModule(reprocessing_remove_unfiltered_events, 
+               "check_unfiltered_events",
+               Streams=[icetray.I3Frame.DAQ])
 
 filter_file = os.path.expandvars("$I3_SRC/online_filterscripts/resources/filter_config.json")
 # core... base processing and filter...
