@@ -384,6 +384,7 @@ def runner(infiles: tuple[Path, Path, Path, Path]) -> dict:
     finally:
         print("Copying logs")
         try:
+            shutil.copy(local_infile, outdir / local_infile.name)
             shutil.copy(local_stdout_file, stdout_file)
             shutil.copy(local_stderr_file, stderr_file)
         except Exception:
