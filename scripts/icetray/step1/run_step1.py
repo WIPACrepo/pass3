@@ -451,6 +451,7 @@ def run_parallel(
     bundle_key = str(infiles[0][1])
     success: dict = {bundle_key: []}
     files_to_be_processed = [str(i[2]) for i in infiles]
+    files_already_existing = []
 
     with concurrent.futures.ProcessPoolExecutor(max_workers=max_num) as executor:
         results = executor.map(runner, infiles)
@@ -463,11 +464,27 @@ def run_parallel(
                 success[bundle_key].append(file_data)
                 if res.get("infile") in files_to_be_processed:
                     files_to_be_processed.remove(res.get("infile"))
+            if res.get("status") == "WARNING":
+                print(f"Warning: {res.get('msg')}")
+                if "already exists" in res.get("msg", ""):
+                    infile = res.get("infile")
+                    if infile in files_to_be_processed:
+                        files_to_be_processed.remove(infile)
+                        files_already_existing.append(infile)
     json_path = infiles[0][3] / (infiles[0][1].name + ".json")
+    if json_path.exists():
+        print(f"Warning: output JSON {json_path} already exists")
+        with json_path.open("r") as fh:
+            existing_data = json.load(fh)
+            existing_data[bundle_key] = existing_data.get(bundle_key, []) + success[bundle_key]
+            success = existing_data
+        json_path.rename(infiles[0][3] / (infiles[0][1].stem + f"_{int(time.time())}.json"))
     with json_path.open("w") as fh:
         json.dump(success, fh, indent=4, sort_keys=True)
     if files_to_be_processed:
         raise Exception(f"Did not finish {files_to_be_processed} from bundle {infiles[0][1]}")
+    if len(files_already_existing) > 0:
+        print(f"Warning: {len(files_already_existing)} files were already existing and not reprocessed: {files_already_existing}")
     return success
 
 if __name__ == "__main__":
