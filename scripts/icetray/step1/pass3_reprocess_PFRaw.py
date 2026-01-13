@@ -69,9 +69,9 @@ def reprocessing_remove_unfiltered_events(frame):
     Returns:
     True if the frame is an unfiltered event and should be skipped, False otherwise.
     """
-    if "I3EventHeader" in frame:
-        return True
-    return False
+    if "I3EventHeader" not in frame:
+        icetray.logging.log_info("Frame does not contain I3EventHeader, cannot determine if it's an unfiltered event. Failing safe and skipping frame.")
+        return False
 
 start_time = time.asctime()
 
@@ -111,9 +111,9 @@ if args.QIFY:
 # Started with a generated relatively random seed for it
 random_srvc = I3GSLRandomService(int.from_bytes(os.urandom(4), sys.byteorder))
 
-tray.AddModule(reprocessing_remove_unfiltered_events, 
-               "check_unfiltered_events",
-               Streams=[icetray.I3Frame.DAQ])
+# tray.Add(reprocessing_remove_unfiltered_events,
+#          "check_unfiltered_events",
+#          If=lambda f: ("I3EventHeader" not in f))
 
 filter_file = os.path.expandvars("$I3_SRC/online_filterscripts/resources/filter_config.json")
 # core... base processing and filter...
