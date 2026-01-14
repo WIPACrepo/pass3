@@ -374,19 +374,20 @@ def runner(infiles: tuple[Path, Path, Path, Path]) -> dict:
             try:
                 subprocess.run(command, shell=True, stdout=stdout, stderr=stderr, check=True)
             except subprocess.CalledProcessError:
+                shutil.copy(local_infile, outdir / local_infile.name)
                 return {"status": "ERROR", "msg": f"{infile} in {bundle} has failed to process."}
             stdout.write(f"End Time PFRAW: {datetime.now(timezone.utc)}\n")
             try:
                 subprocess.run(moni_command, shell=True, stdout=stdout, stderr=stderr, check=True)
             except subprocess.CalledProcessError:
+                shutil.copy(local_infile, outdir / local_infile.name)
                 return {"status": "ERROR", "msg": f"{infile} in {bundle} has failed during moni."}
             stdout.write(f"End Time: {datetime.now(timezone.utc)}\n")
     finally:
         print("Copying logs")
         try:
-            # Copying PFRaw and logs to output dir with sanitized names 
+            # Copying logs to output dir with sanitized names 
             # for debugging
-            shutil.copy(local_infile, outdir / local_infile.name)
             shutil.copy(local_stdout_file, stdout_file)
             shutil.copy(local_stderr_file, stderr_file)
         except Exception:
