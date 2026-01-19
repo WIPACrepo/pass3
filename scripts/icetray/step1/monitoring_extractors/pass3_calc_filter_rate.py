@@ -51,7 +51,7 @@ class FilterRateMonitorI3Module(I3ConditionalModule):
 
     def Finish(self):
         """"Aggregate info and write to txt file"""
-        if self.frame_cnt > 0:
+        if self.frame_cnt > 0 and self.stop_time and self.start_time:
             time_l = (self.stop_time - self.start_time) / I3Units.second
             if time_l < 0:
                 raise ValueError("Invalid time length.")
