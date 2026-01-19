@@ -343,7 +343,7 @@ def runner(infiles: tuple[Path, Path, Path, Path]) -> dict:
     if outfile.exists():
         if not check_i3_file(outfile):
             raise Exception(f"Output file {outfile} is not a valid i3 file.")
-        return {"status": "WARNING", "msg": f"Output file {outfile} from bundle {bundle} already exists."}
+        return {"status": "WARNING", "msg": f"Output file {outfile} from bundle {bundle} already exists.", "infile": f"{infile}"}
 
     local_stdout_file, local_stderr_file = get_logfilenames(infile,
                                                             tmpdir)
