@@ -1,8 +1,5 @@
 import argparse
 import json
-import math
-import os
-import random
 import zipfile
 from datetime import datetime, timezone
 
@@ -32,7 +29,8 @@ def member_key(member_path: str) -> str:
     return Path(p).name
 
 
-def resolve_local_bundle_path(archive_bundle: Path, bundledir: Optional[Path]) -> Path:
+def resolve_local_bundle_path(
+        archive_bundle: Path, bundledir: Optional[Path]) -> Path:
     """Resolve an archive-path bundle to a local file path.
 
     If the archive_bundle already exists locally, it is returned.
@@ -106,25 +104,29 @@ def _extract_members_from_manifest_text(text: str) -> list[str]:
     return [f for f in files if f]
 
 
-def _read_ndjson_manifest(path: Path) -> list[str]:
-    """Read a bundle manifest in JSON or NDJSON form.
+# def _read_ndjson_manifest(path: Path) -> list[str]:
+#     """Read a bundle manifest in JSON or NDJSON form.
 
-    We intentionally accept a few common encodings:
-    - A JSON array of strings
-    - NDJSON with each line being a string
-    - NDJSON with each line being an object with a plausible filename key
-    """
-    return _extract_members_from_manifest_text(path.read_text())
+#     We intentionally accept a few common encodings:
+#     - A JSON array of strings
+#     - NDJSON with each line being a string
+#     - NDJSON with each line being an object with a plausible filename key
+#     """
+#     return _extract_members_from_manifest_text(path.read_text())
 
 
 def _read_manifest_from_zip(bundle: Path) -> Optional[Tuple[str, str]]:
-    """Return (manifest_text, manifest_member_name) if a *.ndjson exists in the zip."""
+    """Return (manifest_text, manifest_member_name) if a *metadata*.ndjson/*.json exists in the zip."""
     try:
         with zipfile.ZipFile(bundle) as zf:
-            ndjson_members = [n for n in zf.namelist() if n.lower().endswith(".ndjson")]
-            if not ndjson_members:
+            metadata_members = [n for n in zf.namelist() 
+                                if (n.lower().contains("metadata") and 
+                                    (n.lower().endswith(".ndjson") or 
+                                     n.lower().endswith(".json")))]
+            if not metadata_members:
                 return None
-            member = sorted(ndjson_members)[0]
+            print(f"Found manifest members in {bundle}: {metadata_members}")
+            member = sorted(metadata_members)[0]
             with zf.open(member) as fh:
                 text = fh.read().decode("utf-8", errors="replace")
             return text, member
@@ -132,50 +134,21 @@ def _read_manifest_from_zip(bundle: Path) -> Optional[Tuple[str, str]]:
         return None
 
 
-def find_bundle_manifest(bundle: Path) -> Optional[Path]:
-    """Find a sidecar manifest for a bundle.
-
-    We try the most common convention: <bundle>.ndjson (i.e. .zip -> .ndjson)
-    and then fall back to searching in the same directory.
-    """
-    candidates: list[Path] = []
-    if bundle.suffix == ".zip":
-        direct = bundle.with_suffix(".ndjson")
-        if direct.exists():
-            return direct
-        candidates.extend(sorted(bundle.parent.glob(bundle.stem + "*.ndjson")))
-    else:
-        candidates.extend(sorted(bundle.parent.glob(bundle.name + "*.ndjson")))
-
-    if not candidates:
-        return None
-    # Prefer exact stem match
-    for c in candidates:
-        if c.stem == bundle.stem:
-            return c
-    return candidates[0]
-
-
-def get_bundle_manifest_members(bundle: Path) -> Tuple[List[str], Optional[str]]:
+def get_bundle_manifest_members(
+        bundle: Path) -> Tuple[List[str], Optional[str]]:
     """Return (members, source).
 
     source is one of:
-    - "sidecar:<path>"
     - "zip:<member>"
     - None (no manifest found)
     """
-    sidecar = find_bundle_manifest(bundle)
-    if sidecar and sidecar.exists():
-        try:
-            return _read_ndjson_manifest(sidecar), f"sidecar:{sidecar}"
-        except Exception:
-            pass
-
     if bundle.exists():
         z = _read_manifest_from_zip(bundle)
         if z is not None:
             text, member = z
             return _extract_members_from_manifest_text(text), f"zip:{member}"
+    else:
+        print(f"Bundle {bundle} does not exist locally.")
 
     return [], None
 
