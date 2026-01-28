@@ -63,6 +63,19 @@ def _extract_members_from_manifest_text(text: str) -> list[str]:
     if not text:
         return []
 
+    # JSON Object
+    if text[0] == "{":
+        try:
+            data = json.loads(text)
+            if isinstance(data, dict) and "files" in data:
+                files = data["files"]
+                if isinstance(files, list):
+                    return [member_key(str(x["logical_name"]))
+                            for x in files
+                            if str(x["logical_name"]).strip()]
+        except Exception:
+            pass
+
     # JSON array
     if text[0] == "[":
         try:
@@ -120,12 +133,11 @@ def _read_manifest_from_zip(bundle: Path) -> Optional[Tuple[str, str]]:
     try:
         with zipfile.ZipFile(bundle) as zf:
             metadata_members = [n for n in zf.namelist() 
-                                if (n.lower().contains("metadata") and 
-                                    (n.lower().endswith(".ndjson") or 
+                                if (("metadata" in n.lower()) and
+                                    (n.lower().endswith(".ndjson") or
                                      n.lower().endswith(".json")))]
             if not metadata_members:
                 return None
-            print(f"Found manifest members in {bundle}: {metadata_members}")
             member = sorted(metadata_members)[0]
             with zf.open(member) as fh:
                 text = fh.read().decode("utf-8", errors="replace")
@@ -181,6 +193,7 @@ def compute_duplicate_skip_lists(
                 winner_for_member[member] = bundle
             elif winner_for_member[member] != bundle:
                 dupes_for_bundle[bundle].append(member)
+
 
     result: dict[Path, dict[str, object]] = {}
     now = datetime.now(timezone.utc).isoformat()
