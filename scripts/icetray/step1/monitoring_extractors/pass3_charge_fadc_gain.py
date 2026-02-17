@@ -1,9 +1,6 @@
 import logging
 import numpy as np
-import sys
-import unittest
-from icecube import dataclasses, dataio, icetray
-from icecube import DomTools
+from icecube import dataclasses, icetray
 
 from numba import njit
 
@@ -28,10 +25,12 @@ def pulsemap_to_histograms(pulsemap_np, bins, atwd_hists, fadc_hists):
         if charge_bin > len(bins)-1:
             continue
 
-        # We
-        if width < 6:  # nanoseconds. This is a signifier of an ATWD pulse
+        # We need to push ATWD and FADC pulses to separate histograms,
+        # but the np.asarray interface doesn't include the pulse flags.
+        # Use the pulse widths (given in ns) as a proxy.
+        if width < 6:
             atwd_hists[int(string), int(om), int(charge_bin)] += 1
-        else:          # anything else is an FADC pulse
+        else:
             fadc_hists[int(string), int(om), int(charge_bin)] += 1
     return
 
@@ -70,16 +69,21 @@ class PulseChargeFilterHarvester(icetray.I3ConditionalModule):
         self.fadc_histograms = np.zeros(self.shape, dtype=np.float32)
         self.bin_mask = ((self.peak_fit_bounds[0] <= self.charge_bins)
                           & (self.charge_bins <= self.peak_fit_bounds[1]))[:-1]
+        self.start_time = None
         self.nframes = 0
 
     def DAQ(self, frame):
         """Grab information from Q-frames for testing."""
+        if (self.start_time is None) and "I3EventHeader" in frame.keys():
+            header = frame["I3EventHeader"]
+            self.start_time = np.datetime64(header.start_time.date_time)
         if self.psm_key in frame:
             pulsemap = dataclasses.I3RecoPulseSeriesMap.from_frame(frame,  self.psm_key)
-            pulsemap_to_histograms(np.asarray(pulsemap),
-                                   self.charge_bins,
-                                   self.atwd_histograms,
-                                   self.fadc_histograms)
+            if len(pulsemap.keys()) > 0:
+                pulsemap_to_histograms(np.asarray(pulsemap),
+                                       self.charge_bins,
+                                       self.atwd_histograms,
+                                       self.fadc_histograms)
             self.nframes += 1
         self.PushFrame(frame)
         return
@@ -93,26 +97,32 @@ class PulseChargeFilterHarvester(icetray.I3ConditionalModule):
             for omkey in np.ndindex(self.shape[:-1]):
                 if (omkey[0]==0) or (omkey[1]==0):
                     continue
+                if ((self.atwd_histograms[omkey].sum() == 0)
+                    and (self.fadc_histograms[omkey].sum() == 0)):
+                    continue
                 atwd_mean = self._estimate_peak(self.atwd_histograms[omkey])
                 fadc_mean = self._estimate_peak(self.fadc_histograms[omkey])
                 mean = (atwd_mean+fadc_mean)/2
-                ratio = np.abs(atwd_mean-fadc_mean)/mean
-                print(f"OMKey {omkey}, ATWD: {atwd_mean}, FADC: {fadc_mean}, ratio: {ratio}")
-                f.write(f"OMKey {omkey}, ATWD: {atwd_mean}, FADC: {fadc_mean}, ratio: {ratio}\n")
-                if ratio > 0.01:
-                    self.logger.warning(f"PulseChargeFilterHarvester: ATWD and FADC mean charge ratio for OMKey {omkey} is > 1%")
+                percent_diff = np.abs(atwd_mean-fadc_mean)/mean
+                print(f"OMKey {omkey[0]}-{omkey[1]}, ATWD: {atwd_mean}, FADC: {fadc_mean}, percent diff: {percent_diff}")
+                f.write(f"OMKey {omkey[0]}-{omkey[1]}, ATWD: {atwd_mean}, FADC: {fadc_mean}, percent diff: {percent_diff}\n")
+                if percent_diff > 0.01:
+                    self.logger.warning(f"PulseChargeFilterHarvester: ATWD and FADC mean charge differ for OMKey {omkey[0]}-{omkey[1]} by > 1%")
 
     def _estimate_peak(self, histogram):
         yvals = histogram * self.charge_bins_center
-        mean = yvals[self.bin_mask].sum() / histogram[self.bin_mask].sum()
+        mean = yvals[...,self.bin_mask].sum(axis=-1) / histogram[...,self.bin_mask].sum(axis=-1)
         return mean
 
     def _write_histogram(self):
         """Write any output files you'll need for testing."""
         np.savez(self.output_filename,
-                 atwd =  self.atwd_histograms,
-                 fadc =  self.fadc_histograms,
-                 bins =  self.charge_bins,
+                 start     = self.start_time,
+                 atwd      = self.atwd_histograms,
+                 atwd_peak = self._estimate_peak(self.atwd_histograms),
+                 fadc      = self.fadc_histograms,
+                 fadc_peak = self._estimate_peak(self.fadc_histograms),
+                 bins      = self.charge_bins,
                  allow_pickle = False)
         self.logger.warning(f"PulseChargeFilterHarvester: Found " +
                             "and wrote ATWD and FADC mean charges" +
