@@ -1,5 +1,7 @@
 import logging
 import numpy as np
+from scipy.stats import norm as gaus
+from scipy.optimize import minimize
 from icecube import dataclasses, icetray
 
 from .numba_charge_histogram import pulsemap_to_histograms
@@ -22,7 +24,7 @@ class PulseChargeFilterHarvester(icetray.I3ConditionalModule):
 
         self.AddParameter("PeakFitBounds",
                           "Bounds to ignore when calculating meaning charge",
-                          [0.8, 1.2])
+                          [0.6, 1.4])
 
     def Configure(self):
         """Do any preliminary setup."""
@@ -31,7 +33,7 @@ class PulseChargeFilterHarvester(icetray.I3ConditionalModule):
         self.peak_fit_bounds = self.GetParameter("PeakFitBounds")
         # Choose bins to match the charge discretization from SuperDST
         # https://docs.icecube.aq/icetray/main/projects/dataclasses/superdst.html#charge-stamps-inice
-        self.charge_binsize = 0.025
+        self.charge_binsize = 0.1
         self.charge_bins = np.arange(0, 5 + self.charge_binsize, self.charge_binsize)
         self.charge_bins_center = self.charge_bins[:-1] + np.diff(self.charge_bins)
         self.shape = (87, 61, len(self.charge_bins)-1)
@@ -70,28 +72,80 @@ class PulseChargeFilterHarvester(icetray.I3ConditionalModule):
                 if ((self.atwd_histograms[omkey].sum() == 0)
                     and (self.fadc_histograms[omkey].sum() == 0)):
                     continue
-                atwd_mean = self._estimate_peak(self.atwd_histograms[omkey])
-                fadc_mean = self._estimate_peak(self.fadc_histograms[omkey])
-                mean = (atwd_mean+fadc_mean)/2
-                percent_diff = np.abs(atwd_mean-fadc_mean)/mean
+                atwd_mean, atwd_sigma = self._estimate_peak(self.atwd_histograms[omkey])
+                fadc_mean, fadc_sigma = self._estimate_peak(self.fadc_histograms[omkey])
+
+                percent_diff = np.abs(atwd_mean-fadc_mean)/atwd_mean
                 print(f"OMKey {omkey[0]}-{omkey[1]}, ATWD: {atwd_mean}, FADC: {fadc_mean}, percent diff: {percent_diff}")
                 f.write(f"OMKey {omkey[0]}-{omkey[1]}, ATWD: {atwd_mean}, FADC: {fadc_mean}, percent diff: {percent_diff}\n")
                 if percent_diff > 0.01:
                     self.logger.warning(f"PulseChargeFilterHarvester: ATWD and FADC mean charge differ for OMKey {omkey[0]}-{omkey[1]} by > 1%")
 
     def _estimate_peak(self, histogram):
-        yvals = histogram * self.charge_bins_center
-        mean = yvals[...,self.bin_mask].sum(axis=-1) / histogram[...,self.bin_mask].sum(axis=-1)
-        return mean
+        xvals = self.charge_bins_center[self.bin_mask]
+        yvals = histogram[..., self.bin_mask]
+        mean = (xvals * yvals).sum(axis=-1) / yvals.sum(axis=-1)
+        variance = (xvals**2 * yvals).sum(axis=-1) / yvals.sum(axis=-1) - mean**2
+
+        gaus_mean, gaus_sigma = np.zeros_like(mean), np.zeros_like(mean)
+
+        # Get the bins edges associated with the masked bin centers
+        bins = np.unique([self.charge_bins[:-1][self.bin_mask],
+                          self.charge_bins[1:][self.bin_mask]])
+
+        for idx in np.ndindex(mean.shape):
+            # We're using 0-indexed arrays with empty string=0 rows and om=0 columns.
+            # Skip those cases.
+            if np.sum(yvals[idx]) == 0:
+                continue
+            min_opts = {'maxiter': 10000, 'gtol': 1e-6, 'disp': False}
+            seed = (mean[idx], np.sqrt(variance[idx]))
+            min_bds = ((seed[0] - 0.5, seed[0] + 0.5),
+                       (seed[1] * 0.5, seed[1] * 2))
+            def chi2(params, summed=True):
+                mean, sigma = params
+                cdf = gaus.cdf(bins, loc=mean, scale=sigma)
+                expected = np.diff(cdf)
+                expected *= yvals[idx].sum() / expected.sum()
+
+                perbin = (yvals[idx]-expected)**2 / expected#yvals[idx]
+                if summed:
+                    total = np.nansum(perbin)
+                    if total == 0:
+                        # This is only likely to happen when the fit wanders off. Penalize it.
+                        return np.finfo(np.float64).max
+                    return total
+                else:
+                    return perbin
+
+            method = "Nelder-Mead"
+            result = minimize(chi2, x0=seed, method=method,
+                              bounds=min_bds, options=min_opts)
+            if not result.success:
+                seed1 = [sv * 0.9 for sv in seed]
+                result = minimize(chi2, x0=seed1, method=method,
+                                  bounds=min_bds, options=min_opts)
+                if not result.success:
+                    seed1 = [sv * 1.1 for sv in seed]
+                    result = minimize(chi2, x0=seed1, method=method,
+                                      bounds=min_bds, options=min_opts)
+            gaus_mean[idx] = result.x[0]
+            gaus_sigma[idx] = result.x[1]
+        return gaus_mean, gaus_sigma
 
     def _write_histogram(self):
         """Write any output files you'll need for testing."""
+        atwd_mean, atwd_sigma = self._estimate_peak(self.atwd_histograms)
+        fadc_mean, fadc_sigma = self._estimate_peak(self.fadc_histograms)
         np.savez(self.output_filename,
+                 bounds    = self.peak_fit_bounds,
                  start     = self.start_time,
                  atwd      = self.atwd_histograms,
-                 atwd_peak = self._estimate_peak(self.atwd_histograms),
+                 atwd_mean = atwd_mean,
+                 atwd_sigma = atwd_sigma,
                  fadc      = self.fadc_histograms,
-                 fadc_peak = self._estimate_peak(self.fadc_histograms),
+                 fadc_mean = fadc_mean,
+                 fadc_sigma = fadc_sigma,
                  bins      = self.charge_bins,
                  allow_pickle = False)
         self.logger.warning(f"PulseChargeFilterHarvester: Found " +

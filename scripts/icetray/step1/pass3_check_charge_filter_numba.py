@@ -21,6 +21,9 @@ parser.add_argument("-g","--gcd",
                     dest="GCD",
                     required=True,
                     help="GCD File to be used for unpacking")
+parser.add_argument("-q", "--qify",
+                    dest="qify", action='store_true', default=False,
+                    help="Convert P-frame PFFilt output to Q-frames.")
 args = parser.parse_args()
 
 icetray.set_log_level_for_unit('I3Tray', icetray.I3LogLevel.LOG_TRACE)
@@ -28,6 +31,9 @@ icetray.set_log_level_for_unit('I3Tray', icetray.I3LogLevel.LOG_TRACE)
 tray = I3Tray()
 
 tray.Add(dataio.I3Reader, "reader", FilenameList=[args.GCD] + args.INFILES)
+
+if args.qify:
+    tray.AddModule("QConverter", "qify", WritePFrame=False)
 
 tray.Add(PulseChargeFilterHarvester, "charge_harvester",
          PulseSeriesMapKey = "I3SuperDST",
