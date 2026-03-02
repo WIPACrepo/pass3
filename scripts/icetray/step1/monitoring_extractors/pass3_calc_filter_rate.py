@@ -42,6 +42,10 @@ class FilterRateMonitorI3Module(I3ConditionalModule):
                 self.start_time = frame[self.eventheader_key].start_time
             # Save the event time as potential last...
             self.stop_time = frame[self.eventheader_key].start_time
+            if self.start_time < frame[self.eventheader_key].start_time:
+                self.start_time = frame[self.eventheader_key].start_time
+            if frame[self.eventheader_key].start_time > self.stop_time:
+                self.stop_time = frame[self.eventheader_key].start_time
         if self.filtermask_key in frame:
             for name in frame[self.filtermask_key].keys():
                 if frame[self.filtermask_key][name].prescale_passed:
