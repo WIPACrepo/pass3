@@ -1,5 +1,8 @@
 """Utility to calculate filter rates from filtered output files."""
 from __future__ import annotations
+
+import json
+
 from icecube.icetray import I3ConditionalModule, I3Units
 
 from collections import defaultdict
@@ -59,16 +62,18 @@ class FilterRateMonitorI3Module(I3ConditionalModule):
             time_l = (self.stop_time - self.start_time) / I3Units.second
             if time_l < 0:
                 raise ValueError("Invalid time length.")
+            json_out = {
+                "files_cover": time_l,
+                "overall_frame_rate": self.frame_cnt / time_l,
+                "filter_rates": {afilter: self.filter_cnt[afilter] / time_l for afilter in self.filter_cnt}
+            }
             with Path.open(self.outfile, "w") as f:
-                f.write(f"Files cover: {time_l} sec.\n")
-                f.write(f"Overall frame rate: {self.frame_cnt / time_l} Hz\n")
-                for afilter in self.filter_cnt:
-                    f.write(f"Filter: {afilter} Rate: {self.filter_cnt[afilter] / time_l} Hz\n")
+                json.dump(json_out, f, indent=2)
             if "Keep_SuperDST_23" in self.filter_cnt.keys():
                 if (self.filter_cnt["Keep_SuperDST_23"] / time_l) <= 1300.:
                     print("WARNING: Keep_SuperDST_23 rate is below 1300 Hz")
         else:
             with Path.open(self.outfile, "w") as f:
-                print(self.start_time)
-                print(self.stop_time)
-                print(self.frame_cnt)
+                f.write(f"Start time: {self.start_time}\n")
+                f.write(f"Stop time: {self.stop_time}\n")
+                f.write(f"Frame count: {self.frame_cnt}\n")
