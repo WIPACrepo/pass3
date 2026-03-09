@@ -112,7 +112,7 @@ def parse_json(file: str) -> dict:
     return data
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(prog='dump_muonitron_output')
+    parser = argparse.ArgumentParser(prog='pass3_update_gcd_chargecorr')
     parser.add_argument("-i", "--infile", dest="infile", type=str, required=True)
     parser.add_argument("-o", "--outfile", dest="outfile", type=str, required=True)
     parser.add_argument("--inaudit", dest="inaudit", type=str, required=True)
@@ -128,13 +128,13 @@ if __name__ == "__main__":
     icetray.logging.log_warn(f"Using database file: {args.fadc_gcddb}")
 
     fadc_corr = parse_json(args.fadc_corr)
-    fadc_gcddb = parse_json(args.fadc_gcddb)
 
     icetray.logging.rotating_files(args.inaudit)
     # Input GCD file audit, look for DOMs with nan error
     rc = run_gcd_audit_pass3(args.infile, nan_error = True, not1_error = False)
 
-    if fadc_gcddb:
+    if args.fadc_gcddb:
+        fadc_gcddb = parse_json(args.fadc_gcddb)
         correct_gcd_file(args.infile, args.outfile, fadc_corr, fadc_gcddb)
     else:
         correct_gcd_file(args.infile, args.outfile, fadc_corr)
