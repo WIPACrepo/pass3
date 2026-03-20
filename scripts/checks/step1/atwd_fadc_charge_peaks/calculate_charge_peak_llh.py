@@ -1,4 +1,4 @@
-#!/bin/sh /cvmfs/icecube.opensciencegrid.org/py3-v4.4.2/icetray-start
+#!/usr/bin/env python3
 
 """
 This is the modified LLH calculating script.
@@ -17,18 +17,15 @@ FADC means for the data file, which can be useful for understanding how
 well the data matches the templates.
 """
 
-import numpy as np
-from matplotlib import pyplot as plt
-from matplotlib import colors
-from scipy import stats
-from scipy.stats import poisson
-import glob
-from pathlib import Path
-
 # Switched to argparse because it is the modern standard.
 # Optparse is deprecated
 import argparse
+import json
 
+import numpy as np
+from scipy import stats
+from scipy.stats import poisson
+from pathlib import Path
 
 def check_input_file(file: Path):
     """
@@ -121,7 +118,6 @@ def calc_llh(
     nbins: int = 40,
     lower_bound: float = 0.8,
     upper_bound: float = 1.2,
-    plot: bool = True,
 ):
     """
     Calculate the log likelihood for a run data file, testing against both the corrected and uncorrected hypotheses.
@@ -138,11 +134,11 @@ def calc_llh(
     """
 
     print(f"Data File: {data_file}")
-    # TODO: switching to pathlib
-    run_num = (
-        data_file.split(".")[0].split("/")[-1].split("Run")[1]
-    )  # get year and run number for label stuff
-    year = data_file.split("/")[-3]
+    # # get year and run number for label stuff
+    dir = data_file.parent
+    run_num = data_file.parts[-2]
+    year = data_file.parts[-3]
+
 
     print(f"Data File: {year}, Run {run_num}")
 
@@ -189,7 +185,7 @@ def calc_llh(
             )
             logL_uncorr += np.log(pois_uncorr)
 
-    print(f"Data Counts: {str(int(np.sum(counts_test_data)))}")
+    print(f"Data Counts: {int(np.sum(counts_test_data))}")
 
     print(f"logL_corrected: {logL_corr:.3f}")
     print(f"logL_unorrected: {logL_uncorr:.3f}")
@@ -218,6 +214,19 @@ def calc_llh(
     print(f"Pearson correlation coefficient: {pearson_r:.3f}")
     print(f"ATWD Standard Deviation: {std_atwd:.3f}")
     print(f"FADC Standard Deviation: {std_fadc:.3f}")
+
+    # save the results to a JSON file
+    results = {
+        "logL_corr": logL_corr,
+        "logL_uncorr": logL_uncorr,
+        "delta_logL": logL_corr - logL_uncorr,
+        "pearson_r": pearson_r,
+        "std_atwd": std_atwd,
+        "std_fadc": std_fadc
+    }
+
+    with open(dir / f"{data_file.stem}_results.json", "w") as f:
+        json.dump(results, f)
 
     return logL_corr, logL_uncorr
 
