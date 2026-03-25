@@ -6,6 +6,7 @@ from icecube import dataio
 from icecube import icetray
 from monitoring_extractors.pass3_charge_fadc_gain_numba import PulseChargeFilterHarvester
 
+
 parser = argparse.ArgumentParser(
     description='Histogram and dump to a pickle file.')
 parser.add_argument("-o","--output-filename",
@@ -24,6 +25,9 @@ parser.add_argument("-g","--gcd",
 parser.add_argument("-q", "--qify",
                     dest="qify", action='store_true', default=False,
                     help="Convert P-frame PFFilt output to Q-frames.")
+parser.add_argument("--filter-rates",
+                    dest="filter_rates", action='store_true', default=False,
+                    help="Calculate and log filter rates.")
 args = parser.parse_args()
 
 icetray.set_log_level_for_unit('I3Tray', icetray.I3LogLevel.LOG_TRACE)
@@ -39,5 +43,14 @@ tray.Add(PulseChargeFilterHarvester, "charge_harvester",
          PulseSeriesMapKey = "I3SuperDST",
          OutputFilename = args.OUTPUT_FILENAME + ".fadc_atwd_charge.npz"
          )
+
+if args.filter_rates:
+    from monitoring_extractors.pass3_calc_filter_rate import FilterRateMonitorI3Module
+    
+    tray.Add(FilterRateMonitorI3Module, "filter_rate_monitor",
+            eventheader_key = "I3EventHeader",
+            filtermask_key = "OnlineFilterMask",
+            output_file = args.OUTPUT_FILENAME + ".filter_rates.txt"
+            )
 
 tray.Execute()
