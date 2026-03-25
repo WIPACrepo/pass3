@@ -39,7 +39,7 @@ class FilterRateMonitorI3Module(I3ConditionalModule):
     def DAQ(self, frame):
         """Counting filters and time for Q frames"""
         if self.eventheader_key in frame:
-            self.header_cnt = +1
+            self.header_cnt += 1
             if (self.start_time is None) or (self.frame_cnt == 0):
                 # Save the first event time
                 self.start_time = frame[self.eventheader_key].start_time
@@ -49,11 +49,11 @@ class FilterRateMonitorI3Module(I3ConditionalModule):
                 self.start_time = frame[self.eventheader_key].start_time
             if frame[self.eventheader_key].start_time > self.stop_time:
                 self.stop_time = frame[self.eventheader_key].start_time
-        if self.filtermask_key in frame:
-            for name in frame[self.filtermask_key].keys():
-                if frame[self.filtermask_key][name].prescale_passed:
-                    self.filter_cnt[name] += 1
-        self.frame_cnt = +1
+            if self.filtermask_key in frame:
+                for name in frame[self.filtermask_key].keys():
+                    if frame[self.filtermask_key][name].prescale_passed:
+                        self.filter_cnt[name] += 1
+        self.frame_cnt += 1
         self.PushFrame(frame)
 
     def Finish(self):
@@ -64,6 +64,8 @@ class FilterRateMonitorI3Module(I3ConditionalModule):
                 raise ValueError("Invalid time length.")
             json_out = {
                 "files_cover": time_l,
+                "header_count": self.header_cnt,
+                "frame_count": self.frame_cnt,
                 "overall_frame_rate": self.frame_cnt / time_l,
                 "filter_rates": {afilter: self.filter_cnt[afilter] / time_l for afilter in self.filter_cnt}
             }
@@ -77,3 +79,4 @@ class FilterRateMonitorI3Module(I3ConditionalModule):
                 f.write(f"Start time: {self.start_time}\n")
                 f.write(f"Stop time: {self.stop_time}\n")
                 f.write(f"Frame count: {self.frame_cnt}\n")
+                f.write(f"Broken frames: {self.broken_frames}\n")
