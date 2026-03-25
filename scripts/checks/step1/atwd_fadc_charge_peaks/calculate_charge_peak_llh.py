@@ -63,7 +63,6 @@ def check_input_file(file: Path):
         print(f"Input file error: {e}")
         return False
 
-
 def load_mean_data(data_file: Path):
     """
     Load the mean data from a data file, and return the flattened ATWD and FADC mean arrays. This is just a helper function to keep the code cleaner.
@@ -79,7 +78,6 @@ def load_mean_data(data_file: Path):
     flat_fadc_mean_data = data["fadc_mean"].flatten()
 
     return flat_atwd_mean_data, flat_fadc_mean_data
-
 
 def create_mean_charge_hist(
     data_file: Path,
@@ -110,7 +108,6 @@ def create_mean_charge_hist(
 
     return counts_template
 
-
 def calc_llh(
     data_file: Path,
     corr_template: np.ndarray,
@@ -135,10 +132,8 @@ def calc_llh(
 
     print(f"Data File: {data_file}")
     # # get year and run number for label stuff
-    dir = data_file.parent
     run_num = data_file.parts[-2]
     year = data_file.parts[-3]
-
 
     print(f"Data File: {year}, Run {run_num}")
 
@@ -215,8 +210,7 @@ def calc_llh(
     print(f"ATWD Standard Deviation: {std_atwd:.3f}")
     print(f"FADC Standard Deviation: {std_fadc:.3f}")
 
-    # save the results to a JSON file
-    results = {
+    return {
         "logL_corr": logL_corr,
         "logL_uncorr": logL_uncorr,
         "delta_logL": logL_corr - logL_uncorr,
@@ -224,11 +218,6 @@ def calc_llh(
         "std_atwd": std_atwd,
         "std_fadc": std_fadc
     }
-
-    with open(dir / f"{data_file.stem}_results.json", "w") as f:
-        json.dump(results, f)
-
-    return logL_corr, logL_uncorr
 
 
 parser = argparse.ArgumentParser(description="Calculate charge peak LLH")
@@ -239,13 +228,6 @@ parser.add_argument(
     type=Path,
     help="if a file, .npz file containing the ATWD and FADC mean information for a DOM. If a folder, a folder containing .npz files at some level.",
     required=True,
-)
-parser.add_argument(
-    "-o",
-    "--outloc",
-    type=Path,
-    help="location to save files and plots. Default is /data/user/mgarcia/Results/Calibration/FADC_Gain_Correction_LLH/",
-    default=Path("/data/ana/Calibration/Pass3_Monitoring/FADC_Gain_Correction_LLH/"),
 )
 parser.add_argument(
     "-n",
@@ -283,7 +265,6 @@ args = parser.parse_args()
 
 # TODO: needs to be corrected for using pathlib
 inloc = args.inloc
-outloc = args.outloc
 
 # setup the templates for corrected and uncorrected
 counts_corr = create_mean_charge_hist(
@@ -319,7 +300,7 @@ else:
 
 for data_file in use_files:
     try:
-        calc_llh(
+        llhs = calc_llh(
             data_file,
             counts_corr,
             counts_uncorr,
@@ -330,3 +311,10 @@ for data_file in use_files:
     except Exception as e:
         print(f"File error with file: {data_file}")
         print(f"Error: {e}")
+
+    llhs["data_file"] = str(data_file)
+    llhs["corrected_template_file"] = str(args.template_corrected)
+    llhs["uncorrected_template_file"] = str(args.template_uncorrected)
+
+    with open(data_file.parent / (f"{data_file.stem}_comparison_results.json"), "w") as f:
+        json.dump(llhs, f, indent=4)
