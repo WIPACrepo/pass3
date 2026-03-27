@@ -1,13 +1,12 @@
 import sys
-from os import mkdir, stat, system
-from os.path import basename, dirname, exists, expandvars, join
+import os
+from os.path import exists, expandvars, join
 from glob import glob
 import time
 
 from argparse import ArgumentParser
 
 # Locate the test script that we need to produce the charge histograms
-test_script = expandvars("$PWD/../../icetray/step1/pass3_check_charge_filter_numba.py")
 
 parser = ArgumentParser()
 parser.add_argument("-i", "--indirs",
@@ -28,6 +27,23 @@ parser.add_argument("-o", "--outdir",
                     type=str, default=".",
                     help = ("The top-level directory to place output npz files. The output directory"
                             " structure will look like {outdir}/{calendar year}/{run}/Run{run}.fadc_atwd_charge.npz"))
+parser.add_argument("--histogramming-script",
+                    type=str, default=expandvars("$PWD/../../icetray/step1/pass3_check_charge_filter_numba.py"),
+                    help = ("The script to run for each run. This should be a script that takes the same arguments as"
+                            " pass3_check_charge_filter_numba.py and produces the expected output npz files."))
+parser.add_argument("--test-script",
+                    type=str, default=expandvars("$PWD/../../checks/step1/mlarson_numba/scripts/checks/step1/atwd_fadc_charge_peaks calculate_charge_peak_llh.py"),
+                    help = ("The script to run for each run. This should be a script that takes the same arguments as pass3_check_charge_filter_numba.py and produces the expected output npz files."))
+parser.add_argument("--filter-rates", action="store_true", default=False,
+                    help = ("Whether to include the filter rate calculation in the histogramming script. This will run the FilterRateMonitorI3Module in the histogramming script and output a text file with filter rates for each run."))
+parser.add_argument("--llh-test", action="store_true", default=False,
+                    help = ("Whether to include the charge peak llh test in the dag. This will run the script specified by --test-script on the output of the histogramming script and compare to templates."))
+parser.add_argument("--llh-template-uncorrected",
+                    type=str, default="/data/ana/Calibration/Pass3_Monitoring/online/icetray/scripts/histograms/Run140950.fadc_atwd_charge.npz",
+                    help = ("The uncorrected ahistogram templates to use for the llh test. These will be passed to the test script specified by --test-script."))
+parser.add_argument("--llh-template-corrected",
+                    type=str, default="/data/ana/Calibration/Pass3_Monitoring/online/icetray/scripts/histograms/Run136692.fadc_atwd_charge.npz",
+                    help = ("The corrected ahistogram templates to use for the llh test. These will be passed to the test script specified by --test-script."))
 args = parser.parse_args()
 
 #--------------------------------------------------
@@ -71,8 +87,8 @@ if not exists(args.outdir):
 dag = ""
 
 # Shared submit description
-dag += "SUBMIT-DESCRIPTION online_checks {\n"
-dag += f"executable   = {test_script}\n"
+dag += "SUBMIT-DESCRIPTION online_checks_data {\n"
+dag += f"executable   = {args.histogramming_script}\n"
 dag += "arguments    = \"$(args)\"\n"
 dag += f"output       = {args.logdir}/$(run).out\n"
 dag += f"error        = {args.logdir}/$(run).err\n"
@@ -81,6 +97,19 @@ dag += "request_cpus   = 1\n"
 dag += "request_memory = 2G\n"
 dag += "request_disk   = 8G\n"
 dag += "}\n"
+
+if args.llh_test:
+    # Shared submit description
+    dag += "SUBMIT-DESCRIPTION charge_llh_checks {\n"
+    dag += f"executable   = {args.test_script}\n"
+    dag += "arguments    = \"$(args)\"\n"
+    dag += f"output       = {args.logdir}/$(run)_llh.out\n"
+    dag += f"error        = {args.logdir}/$(run)_llh.err\n"
+    dag += "log          = /dev/null\n"
+    dag += "request_cpus   = 1\n"
+    dag += "request_memory = 2G\n"
+    dag += "request_disk   = 8G\n"
+    dag += "}\n"
 
 # Loop over the identified subrun 0 files to build the dag
 # Here, I assume a directory and file name structure to get
@@ -97,20 +126,36 @@ for path in indirs:
     year_outdir = join(args.outdir, year)
     current_outdir = join(year_outdir, str(run))
     if not exists(current_outdir):
-        if not exists(year_outdir):
-            mkdir(year_outdir)
-        mkdir(current_outdir)
+        os.makedirs(current_outdir, exist_ok=True)
 
     # Map out the dag executable call and args
-    cmd = f"JOB online_checks_{run} online_checks DIR {current_outdir}\n"
-    cmd += f"VARS online_checks_{run}"
+    cmd = f"JOB online_checks_data_{run} online_checks_data DIR {current_outdir}\n"
+    cmd += f"VARS online_checks_data_{run}"
+    cmd += f" run=\"{run}\""
     cmd += f" args=\""
     cmd += f" -o {current_outdir}/Run{run}"
     cmd += f" -g {gcd}"
+    if args.filter_rates:
+        cmd += " --filter-rates"
     cmd += f" --infiles"
     for f in sorted(filenames):
         cmd += f" {f}"
     cmd += "\""
+    cmd += "\n"
+
+    if args.llh_test:
+        cmd += f"JOB online_checks_llh_{run} charge_llh_checks DIR {current_outdir}\n"
+        cmd += f"VARS online_checks_llh_{run}"
+        cmd += f" run=\"{run}\""
+        cmd += f" args=\""
+        cmd += f" --template_uncorrected {args.llh_template_uncorrected}"
+        cmd += f" --template_corrected {args.llh_template_corrected}"
+        cmd += f" -i {current_outdir}/Run{run}.fadc_atwd_charge.npz"  
+        cmd += "\""
+        cmd += "\n"
+
+        cmd += f"PARENT online_checks_data_{run} CHILD online_checks_llh_{run}\n"
+
 
     # Write the commands for this run to the dag file
     dag += cmd
