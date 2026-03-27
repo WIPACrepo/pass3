@@ -43,9 +43,9 @@ class FilterRateMonitorI3Module(I3ConditionalModule):
             if (self.start_time is None) or (self.frame_cnt == 0):
                 # Save the first event time
                 self.start_time = frame[self.eventheader_key].start_time
-            # Save the event time as potential last...
-            self.stop_time = frame[self.eventheader_key].start_time
-            if self.start_time < frame[self.eventheader_key].start_time:
+                # Save the event time as potential last...
+                self.stop_time = frame[self.eventheader_key].start_time
+            if self.start_time > frame[self.eventheader_key].start_time:
                 self.start_time = frame[self.eventheader_key].start_time
             if frame[self.eventheader_key].start_time > self.stop_time:
                 self.stop_time = frame[self.eventheader_key].start_time
@@ -60,8 +60,8 @@ class FilterRateMonitorI3Module(I3ConditionalModule):
         """"Aggregate info and write to txt file"""
         if self.frame_cnt > 0 and self.stop_time and self.start_time:
             time_l = (self.stop_time - self.start_time) / I3Units.second
-            if time_l < 0:
-                raise ValueError("Invalid time length.")
+            if time_l <= 0:
+                raise ValueError(f"Invalid time length: {time_l} seconds. Start time: {self.start_time}, Stop time: {self.stop_time}")
             json_out = {
                 "files_cover": time_l,
                 "header_count": self.header_cnt,
