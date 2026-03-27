@@ -26,6 +26,18 @@ class PulseChargeFilterHarvester(icetray.I3ConditionalModule):
                           "Bounds to ignore when calculating meaning charge",
                           [0.6, 1.4])
 
+        self.AddParameter("ChargeBinsize",
+                          "Bin size to use for charge histograms. Default 0.1 PE.",
+                          0.1)
+        
+        self.AddParameter("ChargeBinMin",
+                          "Minimum charge to histogram. Default 0 PE.",
+                          0.0)
+
+        self.AddParameter("ChargeBinMax",
+                          "Maximum charge to histogram. Default 5 PE.",
+                          5.0)
+
     def Configure(self):
         """Do any preliminary setup."""
         self.output_filename = self.GetParameter("OutputFilename")
@@ -33,8 +45,15 @@ class PulseChargeFilterHarvester(icetray.I3ConditionalModule):
         self.peak_fit_bounds = self.GetParameter("PeakFitBounds")
         # Choose bins to match the charge discretization from SuperDST
         # https://docs.icecube.aq/icetray/main/projects/dataclasses/superdst.html#charge-stamps-inice
-        self.charge_binsize = 0.1
-        self.charge_bins = np.arange(0, 5 + self.charge_binsize, self.charge_binsize)
+        self.charge_binsize = self.GetParameter("ChargeBinsize")
+        self.charge_binmin = self.GetParameter("ChargeBinMin")
+        self.charge_binmax = self.GetParameter("ChargeBinMax")
+
+        self.charge_bins = np.arange(
+            self.charge_binmin,
+            self.charge_binmax + self.charge_binsize,
+            self.charge_binsize)
+
         self.charge_bins_center = self.charge_bins[:-1] + np.diff(self.charge_bins)
         self.shape = (87, 61, len(self.charge_bins)-1)
         self.atwd_histograms = np.zeros(self.shape, dtype=np.float32)
