@@ -1,3 +1,6 @@
+#!/bin/sh /cvmfs/icecube.opensciencegrid.org/py3-v4.4.2/icetray-start
+#METAPROJECT /data/user/briedel/pass3/icetray/v1.17.0/build/
+
 """"Sanity checks on output of Pass3 Step 1 script"""
 import argparse
 
@@ -46,7 +49,7 @@ tray.Add(PulseChargeFilterHarvester, "charge_harvester",
 
 if args.filter_rates:
     from monitoring_extractors.pass3_calc_filter_rate import FilterRateMonitorI3Module
-    
+
     tray.Add(FilterRateMonitorI3Module, "filter_rate_monitor",
             eventheader_key = "I3EventHeader",
             filtermask_key = "OnlineFilterMask",
