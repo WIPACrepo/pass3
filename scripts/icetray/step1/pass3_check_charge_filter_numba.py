@@ -33,7 +33,9 @@ parser.add_argument("--filter-rates",
                     help="Calculate and log filter rates.")
 args = parser.parse_args()
 
-icetray.set_log_level_for_unit('I3Tray', icetray.I3LogLevel.LOG_TRACE)
+icetray.set_log_level_for_unit('I3Tray', icetray.I3LogLevel.LOG_INFO)
+icetray.set_log_level_for_unit('I3Reader', icetray.I3LogLevel.LOG_INFO)
+
 
 tray = I3Tray()
 
