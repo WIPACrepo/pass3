@@ -1,4 +1,6 @@
-#!/usr/bin/env python3
+#!/bin/sh /cvmfs/icecube.opensciencegrid.org/py3-v4.4.2/icetray-start
+#METAPROJECT /data/user/briedel/pass3/icetray/v1.17.0/build/
+
 
 """
 This is the modified LLH calculating script.
@@ -318,3 +320,8 @@ for data_file in use_files:
 
     with open(data_file.parent / (f"{data_file.stem}_comparison_results.json"), "w") as f:
         json.dump(llhs, f, indent=4)
+
+    if llhs["delta_logL"] < 100:
+        raise ValueError(
+            f"LLH difference is less than 100 for file {data_file}, which is unexpected. Please check the file and the templates to make sure they are correct."
+        )
