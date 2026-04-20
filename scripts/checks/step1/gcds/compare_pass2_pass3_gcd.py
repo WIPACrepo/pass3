@@ -4,7 +4,7 @@
 Changes we expect to see between Pass2 and Pass3 GCDs:
 - Pass3 GCDs should have mean_atwd_charge_correction and mean_fadc_charge_correction set to 1.0 for all DOMs, and should not be NaN.
 - Pass3 GCDs should have the FADC gain correction applied, which means that the FADC gain value in the GCD should be different from the old FADC gain value by the correction factor, and the difference should not be NaN.
-- There should be no change to the relative DOM efficiency values, and they should not be NaN.
+- There should be no change to the relative DOM efficiency values, and they should not be NaN. The NaN piece came up in pre-Pass2 GCDs.
 - Assumed SPE shapes between Pass2a and Pass3 GCD should be different
 - Assumed SPE shapes between Pass2b and Pass3 GCD should be the same, so we can use the SPE shape information to determine which Pass2 GCD we are comparing to.
 """
