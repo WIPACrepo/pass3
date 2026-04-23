@@ -16,6 +16,9 @@ from typing import Union, Optional, Set
 from rest_tools.client import ClientCredentialsAuth
 
 
+RunnerInput = tuple[Path, Path, Path, Path, Optional[str]]
+
+
 def normalize_member_path(path: Union[str, Path]) -> str:
     s = str(path).strip()
     if s.startswith("./"):
@@ -30,32 +33,60 @@ def remove_extension(path: Path) -> Path:
     suffixes = ''.join(path.suffixes)
     return Path(str(path).replace(suffixes, ''))
 
+def _record_sha512(record: dict) -> Optional[str]:
+    checksum_obj = record.get("checksum", {})
+    if isinstance(checksum_obj, dict):
+        return checksum_obj.get("sha512")
+
+    checksum_type = str(record.get("checksumType", "")).lower()
+    if checksum_type == "sha512" and isinstance(checksum_obj, str):
+        return checksum_obj
+
+    return None
+
 def extract_manifest_checksums(bundle_zip_path: Path) -> dict[str, Optional[str]]:
     """
-    Extract SHA512 checksums from ndjson manifest(s) inside the zip.
+    Extract SHA512 checksums from manifest(s) inside the zip.
     Returns a dict mapping member filename (basename) → sha512 (or None if not in manifest).
     """
     checksums = {}
     try:
         with zipfile.ZipFile(bundle_zip_path) as zf:
-            ndjson_members = [n for n in zf.namelist() if n.lower().endswith(".ndjson")]
-            for manifest_member in sorted(ndjson_members):
+            manifest_members = [
+                n for n in zf.namelist()
+                if n.lower().endswith("metadata.ndjson") or n.lower().endswith(".metadata.json")
+            ]
+            for manifest_member in sorted(manifest_members):
                 with zf.open(manifest_member) as f:
-                    for line in f:
-                        line = line.strip()
-                        if not line:
-                            continue
+                    if manifest_member.lower().endswith("metadata.ndjson"):
+                        for line in f:
+                            line = line.strip()
+                            if not line:
+                                continue
+                            try:
+                                record = json.loads(line)
+                                logical_name = record.get("logical_name", "")
+                                sha512 = _record_sha512(record)
+                                if logical_name and sha512:
+                                    # Store by basename for matching with zip member names
+                                    filename = Path(logical_name).name
+                                    checksums[filename] = sha512
+                            except json.JSONDecodeError:
+                                continue
+                    else:
                         try:
-                            record = json.loads(line)
-                            logical_name = record.get("logical_name", "")
-                            checksum_obj = record.get("checksum", {})
-                            sha512 = checksum_obj.get("sha512") if isinstance(checksum_obj, dict) else None
-                            if logical_name and sha512:
-                                # Store by basename for matching with zip member names
-                                filename = Path(logical_name).name
-                                checksums[filename] = sha512
+                            payload = json.loads(f.read())
                         except json.JSONDecodeError:
                             continue
+
+                        files = payload.get("files", []) if isinstance(payload, dict) else []
+                        for record in files:
+                            if not isinstance(record, dict):
+                                continue
+                            filename = record.get("fileName", "")
+                            sha512 = _record_sha512(record)
+                            if filename and sha512:
+                                checksums[Path(filename).name] = sha512
     except Exception as e:
         print(f"Warning: could not extract checksums from manifest in {bundle_zip_path}: {e}")
     return checksums
@@ -154,7 +185,7 @@ def prepare_inputs(
     bad_files: list[str],
     duplicate_skip_members: Optional[Set[str]] = None,
     transfer_bundle: bool = False,
-) -> list[tuple[Path, Path, Path, Path]]:
+) -> list[RunnerInput]:
     outdir.mkdir(parents=True, exist_ok=True)
 
     MMDD = get_MMDD(bundle)
@@ -198,17 +229,18 @@ def prepare_inputs(
     else:
         raise FileExistsError(f"Bundle {bundle} does not exist in scratch dir {scratchdir} or provided path")
 
-    # Extract/copy any embedded *.ndjson manifest(s) into outdir
+    # Extract/copy any embedded file (*.metadata.[json,ndjson]) manifest(s) into outdir
     try:
         with zipfile.ZipFile(scratch_bundle_loc) as zf:
-            ndjson_members = [n for n in zf.namelist() if n.lower().endswith(".ndjson")]
+            ndjson_members = [n for n in zf.namelist()
+                              if n.lower().endswith("metadata.ndjson") or n.lower().endswith(".metadata.json")]
             for member in sorted(ndjson_members):
                 dst = outdir / Path(member).name
                 # Avoid path traversal by writing using basename only
                 with zf.open(member) as src_fh, open(dst, "wb") as dst_fh:
                     shutil.copyfileobj(src_fh, dst_fh)
     except Exception as e:
-        print(f"Warning: could not extract ndjson manifest from {scratch_bundle_loc}: {e}")
+        print(f"Warning: could not extract file manifest from {scratch_bundle_loc}: {e}")
 
     with zipfile.ZipFile(scratch_bundle_loc) as zf:
         infiles = [f for f in zf.namelist() if ".tar.gz" in f]
@@ -221,7 +253,7 @@ def prepare_inputs(
     # Extract expected checksums from the manifest
     manifest_checksums = extract_manifest_checksums(scratch_bundle_loc)
 
-    inputs: list[tuple[Path, Path, Path, Path, Optional[str]]] = []
+    inputs: list[RunnerInput] = []
     for f in infiles:
         if duplicate_skip_members is not None:
             if normalize_member_path(f) in duplicate_skip_members:
@@ -281,7 +313,7 @@ def check_gcd_file(gcdfile: Path) -> bool:
         raise Exception(f"GCD file {gcdfile} does not have correct values")
     return True
 
-def runner(infiles: tuple[Path, Path, Path, Path]) -> dict:
+def runner(infiles: RunnerInput) -> dict:
 
     # Getting file and file paths
     # Tuple of 5 paths/values:
@@ -430,7 +462,7 @@ def runner(infiles: tuple[Path, Path, Path, Path]) -> dict:
 def get_year_filepath(file_path: str) -> str:
     return str(file_path).split("/")[-3]
 
-def get_date_filepath(file_path: str) -> str:
+def get_date_filepath(file_path: Union[str, Path]) -> str:
     return str(file_path).split("/")[-2]
 
 def get_data_into_filecatalog_format(file: Path, checksum: str) -> dict:
@@ -446,7 +478,7 @@ def get_data_into_filecatalog_format(file: Path, checksum: str) -> dict:
     }
 
 def run_parallel(
-    infiles,
+    infiles: list[RunnerInput],
     max_num: int = 1,
 ):
     if not infiles:
@@ -466,13 +498,14 @@ def run_parallel(
                 checksum = res["outfile"]["sha512sum"]
                 file_data = get_data_into_filecatalog_format(Path(outfile_path), checksum)
                 success[bundle_key].append(file_data)
-                if res.get("infile") in files_to_be_processed:
-                    files_to_be_processed.remove(res.get("infile"))
+                infile = res.get("infile")
+                if isinstance(infile, str) and infile in files_to_be_processed:
+                    files_to_be_processed.remove(infile)
             if res.get("status") == "WARNING":
                 print(f"Warning: {res.get('msg')}")
                 if "already exists" in res.get("msg", ""):
                     infile = res.get("infile")
-                    if infile in files_to_be_processed:
+                    if isinstance(infile, str) and infile in files_to_be_processed:
                         files_to_be_processed.remove(infile)
                         files_already_existing.append(infile)
     json_path = infiles[0][3] / (infiles[0][1].name + ".json")
@@ -511,7 +544,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.maxnumcpus == 0:
-        numcpus = os.cpu_count()
+        numcpus = os.cpu_count() or 1
     else:
         numcpus = args.maxnumcpus
 
