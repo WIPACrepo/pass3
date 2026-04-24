@@ -29,6 +29,21 @@ def member_key(member_path: str) -> str:
     return Path(p).name
 
 
+def _manifest_record_member(record: object) -> Optional[str]:
+    if isinstance(record, str):
+        return record.strip() or None
+
+    if not isinstance(record, dict):
+        return None
+
+    for key in ("logical_name", "fileName", "file", "filename", "name", "path", "member", "archive_member"):
+        value = record.get(key)
+        if value:
+            return str(value)
+
+    return None
+
+
 def resolve_local_bundle_path(
         archive_bundle: Path, bundledir: Optional[Path]) -> Path:
     """Resolve an archive-path bundle to a local file path.
@@ -70,9 +85,12 @@ def _extract_members_from_manifest_text(text: str) -> list[str]:
             if isinstance(data, dict) and "files" in data:
                 files = data["files"]
                 if isinstance(files, list):
-                    return [member_key(str(x["logical_name"]))
-                            for x in files
-                            if str(x["logical_name"]).strip()]
+                    members: list[str] = []
+                    for record in files:
+                        member = _manifest_record_member(record)
+                        if member:
+                            members.append(member_key(member))
+                    return members
         except Exception:
             pass
 
@@ -81,7 +99,12 @@ def _extract_members_from_manifest_text(text: str) -> list[str]:
         try:
             data = json.loads(text)
             if isinstance(data, list):
-                return [member_key(str(x)) for x in data if str(x).strip()]
+                members: list[str] = []
+                for record in data:
+                    member = _manifest_record_member(record)
+                    if member:
+                        members.append(member_key(member))
+                return members
         except Exception:
             pass
 
@@ -98,18 +121,12 @@ def _extract_members_from_manifest_text(text: str) -> list[str]:
 
         if isinstance(obj, str):
             if obj.strip():
-                files.append(normalize_member_path(obj))
+                files.append(member_key(obj))
             continue
 
-        if isinstance(obj, dict):
-            # Your manifest format uses logical_name for members.
-            if obj.get("logical_name"):
-                files.append(member_key(obj["logical_name"]))
-                continue
-            for key in ("file", "filename", "name", "path", "member", "archive_member"):
-                if key in obj and obj[key]:
-                    files.append(member_key(obj[key]))
-                    break
+        member = _manifest_record_member(obj)
+        if member:
+            files.append(member_key(member))
             continue
 
         files.append(member_key(str(obj)))
