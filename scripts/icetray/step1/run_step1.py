@@ -482,7 +482,10 @@ def run_parallel(
     max_num: int = 1,
 ):
     if not infiles:
-        return {}
+        raise Exception(f"ERROR: NO INPUTS PROVIDED")
+        # return {}
+    else:
+        print(f"Inputs: {infiles}")
 
     bundle_key = str(infiles[0][1])
     success: dict = {bundle_key: []}
