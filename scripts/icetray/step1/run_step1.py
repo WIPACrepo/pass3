@@ -18,7 +18,6 @@ from rest_tools.client import ClientCredentialsAuth
 
 RunnerInput = tuple[Path, Path, Path, Path, Optional[str]]
 
-
 def normalize_member_path(path: Union[str, Path]) -> str:
     s = str(path).strip()
     if s.startswith("./"):
@@ -26,7 +25,6 @@ def normalize_member_path(path: Union[str, Path]) -> str:
     if s.startswith("/"):
         s = s[1:]
     return Path(s).name
-
 
 def remove_extension(path: Path) -> Path:
     """Remove multiple suffixes from filename."""
@@ -78,12 +76,11 @@ def extract_manifest_checksums(bundle_zip_path: Path) -> dict[str, Optional[str]
                             payload = json.loads(f.read())
                         except json.JSONDecodeError:
                             continue
-
                         files = payload.get("files", []) if isinstance(payload, dict) else []
                         for record in files:
                             if not isinstance(record, dict):
                                 continue
-                            filename = record.get("fileName", "")
+                            filename = record.get("fileName") or record.get("logical_name", "")
                             sha512 = _record_sha512(record)
                             if filename and sha512:
                                 checksums[Path(filename).name] = sha512
