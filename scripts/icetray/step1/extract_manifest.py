@@ -2,6 +2,7 @@ import argparse
 import shutil
 import zipfile
 from pathlib import Path
+from manifest_utils import find_manifest_members_in_zip
 
 
 def get_archive_key(archive_path: Path) -> str:
@@ -24,16 +25,7 @@ def get_archive_date_parts(archive_path: Path) -> tuple[str, str]:
 
 def find_manifest_member(bundle_zip_path: Path) -> str:
     archive_key = get_archive_key(bundle_zip_path)
-    expected_names = {
-        f"{archive_key}.metadata.json",
-        f"{archive_key}.metadata.ndjson",
-    }
-
-    with zipfile.ZipFile(bundle_zip_path) as zf:
-        matches = [
-            member for member in zf.namelist()
-            if Path(member).name in expected_names
-        ]
+    matches = find_manifest_members_in_zip(bundle_zip_path, archive_key=archive_key)
 
     if not matches:
         raise FileNotFoundError(

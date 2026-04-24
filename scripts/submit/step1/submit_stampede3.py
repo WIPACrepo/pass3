@@ -1,4 +1,5 @@
 import argparse
+import importlib.util
 import json
 import zipfile
 from datetime import datetime, timezone
@@ -7,6 +8,20 @@ from typing import NoReturn, Optional, Dict, Tuple, List
 from pathlib import Path
 from collections import defaultdict
 from itertools import islice
+
+
+STEP1_SCRIPT_DIR = Path(__file__).resolve().parents[2] / "icetray" / "step1"
+MANIFEST_UTILS_PATH = STEP1_SCRIPT_DIR / "manifest_utils.py"
+MANIFEST_UTILS_SPEC = importlib.util.spec_from_file_location("step1_manifest_utils", MANIFEST_UTILS_PATH)
+if MANIFEST_UTILS_SPEC is None or MANIFEST_UTILS_SPEC.loader is None:
+    raise ImportError(f"Could not load manifest utilities from {MANIFEST_UTILS_PATH}")
+
+manifest_utils = importlib.util.module_from_spec(MANIFEST_UTILS_SPEC)
+MANIFEST_UTILS_SPEC.loader.exec_module(manifest_utils)
+
+extract_manifest_members_from_text = manifest_utils.extract_manifest_members_from_text
+find_manifest_members_in_zip = manifest_utils.find_manifest_members_in_zip
+read_manifest_from_zip = manifest_utils.read_manifest_from_zip
 
 
 def normalize_member_path(path: str) -> str:
@@ -27,21 +42,6 @@ def member_key(member_path: str) -> str:
     """
     p = normalize_member_path(member_path)
     return Path(p).name
-
-
-def _manifest_record_member(record: object) -> Optional[str]:
-    if isinstance(record, str):
-        return record.strip() or None
-
-    if not isinstance(record, dict):
-        return None
-
-    for key in ("logical_name", "fileName", "file", "filename", "name", "path", "member", "archive_member"):
-        value = record.get(key)
-        if value:
-            return str(value)
-
-    return None
 
 
 def resolve_local_bundle_path(
@@ -74,64 +74,7 @@ def resolve_local_bundle_path(
 
 
 def _extract_members_from_manifest_text(text: str) -> list[str]:
-    text = text.strip()
-    if not text:
-        return []
-
-    # JSON Object
-    if text[0] == "{":
-        try:
-            data = json.loads(text)
-            if isinstance(data, dict) and "files" in data:
-                files = data["files"]
-                if isinstance(files, list):
-                    members: list[str] = []
-                    for record in files:
-                        member = _manifest_record_member(record)
-                        if member:
-                            members.append(member_key(member))
-                    return members
-        except Exception:
-            pass
-
-    # JSON array
-    if text[0] == "[":
-        try:
-            data = json.loads(text)
-            if isinstance(data, list):
-                members: list[str] = []
-                for record in data:
-                    member = _manifest_record_member(record)
-                    if member:
-                        members.append(member_key(member))
-                return members
-        except Exception:
-            pass
-
-    files: list[str] = []
-    for line in text.splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            obj = json.loads(line)
-        except Exception:
-            files.append(member_key(line))
-            continue
-
-        if isinstance(obj, str):
-            if obj.strip():
-                files.append(member_key(obj))
-            continue
-
-        member = _manifest_record_member(obj)
-        if member:
-            files.append(member_key(member))
-            continue
-
-        files.append(member_key(str(obj)))
-
-    return [f for f in files if f]
+    return [member_key(member) for member in extract_manifest_members_from_text(text)]
 
 
 # def _read_ndjson_manifest(path: Path) -> list[str]:
@@ -143,26 +86,6 @@ def _extract_members_from_manifest_text(text: str) -> list[str]:
 #     - NDJSON with each line being an object with a plausible filename key
 #     """
 #     return _extract_members_from_manifest_text(path.read_text())
-
-
-def _read_manifest_from_zip(bundle: Path) -> Optional[Tuple[str, str]]:
-    """Return (manifest_text, manifest_member_name) if a *metadata*.ndjson/*.json exists in the zip."""
-    try:
-        with zipfile.ZipFile(bundle) as zf:
-            metadata_members = [n for n in zf.namelist() 
-                                if (("metadata" in n.lower()) and
-                                    (n.lower().endswith(".ndjson") or
-                                     n.lower().endswith(".json")))]
-            if not metadata_members:
-                return None
-            member = sorted(metadata_members)[0]
-            with zf.open(member) as fh:
-                text = fh.read().decode("utf-8", errors="replace")
-            return text, member
-    except Exception:
-        return None
-
-
 def get_bundle_manifest_members(
         bundle: Path) -> Tuple[List[str], Optional[str]]:
     """Return (members, source).
@@ -172,7 +95,10 @@ def get_bundle_manifest_members(
     - None (no manifest found)
     """
     if bundle.exists():
-        z = _read_manifest_from_zip(bundle)
+        try:
+            z = read_manifest_from_zip(bundle)
+        except Exception:
+            z = None
         if z is not None:
             text, member = z
             return _extract_members_from_manifest_text(text), f"zip:{member}"
