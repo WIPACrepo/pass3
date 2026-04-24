@@ -13,6 +13,7 @@ import concurrent.futures
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Union, Optional, Set
+from manifest_utils import extract_manifest_checksums_from_zip, find_manifest_members_in_zip
 from rest_tools.client import ClientCredentialsAuth
 
 
@@ -30,63 +31,6 @@ def remove_extension(path: Path) -> Path:
     """Remove multiple suffixes from filename."""
     suffixes = ''.join(path.suffixes)
     return Path(str(path).replace(suffixes, ''))
-
-def _record_sha512(record: dict) -> Optional[str]:
-    checksum_obj = record.get("checksum", {})
-    if isinstance(checksum_obj, dict):
-        return checksum_obj.get("sha512")
-
-    checksum_type = str(record.get("checksumType", "")).lower()
-    if checksum_type == "sha512" and isinstance(checksum_obj, str):
-        return checksum_obj
-
-    return None
-
-def extract_manifest_checksums(bundle_zip_path: Path) -> dict[str, Optional[str]]:
-    """
-    Extract SHA512 checksums from manifest(s) inside the zip.
-    Returns a dict mapping member filename (basename) → sha512 (or None if not in manifest).
-    """
-    checksums = {}
-    try:
-        with zipfile.ZipFile(bundle_zip_path) as zf:
-            manifest_members = [
-                n for n in zf.namelist()
-                if n.lower().endswith("metadata.ndjson") or n.lower().endswith(".metadata.json")
-            ]
-            for manifest_member in sorted(manifest_members):
-                with zf.open(manifest_member) as f:
-                    if manifest_member.lower().endswith("metadata.ndjson"):
-                        for line in f:
-                            line = line.strip()
-                            if not line:
-                                continue
-                            try:
-                                record = json.loads(line)
-                                logical_name = record.get("logical_name", "")
-                                sha512 = _record_sha512(record)
-                                if logical_name and sha512:
-                                    # Store by basename for matching with zip member names
-                                    filename = Path(logical_name).name
-                                    checksums[filename] = sha512
-                            except json.JSONDecodeError:
-                                continue
-                    else:
-                        try:
-                            payload = json.loads(f.read())
-                        except json.JSONDecodeError:
-                            continue
-                        files = payload.get("files", []) if isinstance(payload, dict) else []
-                        for record in files:
-                            if not isinstance(record, dict):
-                                continue
-                            filename = record.get("fileName") or record.get("logical_name", "")
-                            sha512 = _record_sha512(record)
-                            if filename and sha512:
-                                checksums[Path(filename).name] = sha512
-    except Exception as e:
-        print(f"Warning: could not extract checksums from manifest in {bundle_zip_path}: {e}")
-    return checksums
 
 def get_gcd(infile: Path, gcddir: Path) -> Path:
     if not gcddir.exists():
@@ -233,10 +177,9 @@ def prepare_inputs(
 
     # Extract/copy any embedded file (*.metadata.[json,ndjson]) manifest(s) into outdir
     try:
+        manifest_members = find_manifest_members_in_zip(scratch_bundle_loc)
         with zipfile.ZipFile(scratch_bundle_loc) as zf:
-            ndjson_members = [n for n in zf.namelist()
-                              if n.lower().endswith("metadata.ndjson") or n.lower().endswith(".metadata.json")]
-            for member in sorted(ndjson_members):
+            for member in manifest_members:
                 dst = outdir / Path(member).name
                 # Avoid path traversal by writing using basename only
                 with zf.open(member) as src_fh, open(dst, "wb") as dst_fh:
@@ -253,7 +196,11 @@ def prepare_inputs(
         json.dump({f"{bundle.name}": infiles}, f)
 
     # Extract expected checksums from the manifest
-    manifest_checksums = extract_manifest_checksums(scratch_bundle_loc)
+    try:
+        manifest_checksums = extract_manifest_checksums_from_zip(scratch_bundle_loc)
+    except Exception as e:
+        print(f"Warning: could not extract checksums from manifest in {scratch_bundle_loc}: {e}")
+        manifest_checksums = {}
 
     inputs: list[RunnerInput] = []
     for f in infiles:
