@@ -106,11 +106,16 @@ def get_gcd(infile: Path, gcddir: Path) -> Path:
 def get_outfilename(infile: Path) -> Path:
     infilename = str(remove_extension(infile))
     infilenwords = infilename.split('_')
-    if infilename.startswith("ukey"):
-        # some files start with ukey_<uuid>_PFRaw_PhysicsFiltering_Run<runnumber>_...
+    if infilename.startswith("ukey") or infilename.startswith("key"):
+        # some files start with
+        # ukey_<uuid>_PFRaw_PhysicsFiltering_Run<runnumber>_...
+        # key_<number>_PFRaw_PhysicsFiltering_Run<runnumber>_...
         outfilewords = ["Pass3", "Step1"] + infilenwords[3:]
+    elif infilename.startswith("PFRaw"):
+        # some files start with PFRaw_PhysicsFiltering_Run<runnumber>_...
+         outfilewords = ["Pass3", "Step1"] + infilenwords[1:]
     else:
-        outfilewords = ["Pass3", "Step1"] + infilenwords[1:]
+        raise Exception(f"Unexpected infile name format: {infile}")
     return Path("_".join(outfilewords) + ".i3.zst")
 
 def get_logfilenames(infile: Path, outdir: Path) -> tuple[Path, Path]:
@@ -132,7 +137,7 @@ def get_sha512sum(filename: Union[str, Path]) -> str:
     """Compute the SHA512 hash of the data in the specified file."""
     print(f"Getting sha512sum for {filename}")
     h = hashlib.sha512()
-    b = bytearray(128 * 1024)
+    b = bytearray(8192 * 1024)
     mv = memoryview(b)
     with open(str(filename), 'rb', buffering=0) as f:
         for n in iter(lambda: f.readinto(mv), 0):
