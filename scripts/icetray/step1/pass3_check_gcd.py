@@ -30,6 +30,8 @@ class CheckPass3GCDI3Module(I3ConditionalModule):
 
     def Calibration(self, frame):
         cal = frame["I3Calibration"]
+        if self.fadc_gain_key not in frame:
+            raise Exception(f"Old FADC gain key {self.fadc_gain_key} not found in frame")
         old_fadc_gains = frame[self.fadc_gain_key]
         # Checking
         cal_o = cal.dom_cal 
