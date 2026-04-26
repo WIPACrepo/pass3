@@ -35,11 +35,11 @@ class CheckPass3GCDI3Module(I3ConditionalModule):
         cal_o = cal.dom_cal 
         for key, item in cal_o.items():
             if item.mean_atwd_charge_correction != 1.0 and not math.isnan(item.mean_atwd_charge_correction):
-                raise ValueError(f"mean ATWD charge is not 1. Set to {item.mean_atwd_charge_correction}")
+                raise ValueError(f"mean ATWD charge is not for DOM {key}. Set to {item.mean_atwd_charge_correction}")
             if item.mean_fadc_charge_correction != 1.0 and not math.isnan(item.mean_fadc_charge_correction):
-                raise ValueError(f"mean FADC charge is not 1. set to {item.mean_fadc_charge_correction}")
+                raise ValueError(f"mean FADC charge is not 1 for DOM {key}. set to {item.mean_fadc_charge_correction}")
             if math.isnan(item.relative_dom_eff):
-                raise ValueError("relative DOM efficiency is nan")
+                raise ValueError(f"relative DOM efficiency is nan for DOM {key}")
             if key in old_fadc_gains:
                 corr_applied = item.fadc_gain - (
                     old_fadc_gains[key]/(self.fadc_corrs[
