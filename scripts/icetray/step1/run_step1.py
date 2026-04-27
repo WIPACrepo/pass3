@@ -106,7 +106,7 @@ def get_bundle(bundle: Path, outdir: Path, retry_attempts: int = 5):
 def get_run_number(file: Union[str, Path]) -> int:
     s = str(file)
     try:
-        if s.startswith("ukey"):
+        if s.startswith("ukey") or s.startswith("key"):
             return int(s.split('_')[4][3:])
         return int(s.split('_')[2][3:])
     except Exception:
@@ -209,8 +209,8 @@ def prepare_inputs(
                 continue
         try:
             runnum = get_run_number(f)
-        except ValueError:
-            continue
+        except Exception:
+            print(f"WARNING: CAN NOT GET RUN NUMBER FROM FILENAME {f}")
         if (runnum in grl) and (f not in bad_files):
             # Get expected sha512 from manifest by matching basename
             filename_basename = Path(f).name
