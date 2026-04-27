@@ -2,7 +2,11 @@
 from icecube import icetray
 from icecube.icetray import I3ConditionalModule
 from icecube.icetray import I3Tray
+<<<<<<< HEAD
 from icecube import dataioi, dataclasses
+=======
+from icecube import dataio, dataclasses
+>>>>>>> 2bdec7b1cb148f58ab569f074b4dddfd59de53bc
 import math
 import json
 import argparse
@@ -15,6 +19,7 @@ class CheckPass3GCDI3Module(I3ConditionalModule):
         I3ConditionalModule.__init__(self, context)
         self.AddParameter("fadc_gain_correction_json", "file path to the json file with the fadc gain correction factor", None)
         self.AddParameter("old_fadc_gain_key", "key in GCD file for the old FADC gain. should be a map of OMKey to double", "Original_FADC_Gain" )
+        self.geo = None
 
     def Configure(self):
         fadc_corr_json = self.GetParameter("fadc_gain_correction_json")
@@ -23,14 +28,14 @@ class CheckPass3GCDI3Module(I3ConditionalModule):
             self.fadc_corrs = json.load(f)["FADC_gain_correction"]
 
     def Geometry(self, frame):
-        pass
+        self.PushFrame(frame)
 
     def DetectorStatus(self, frame):
-        pass
+        self.PushFrame(frame)
 
     def Calibration(self, frame):
-        geo = frame["I3Geometry"]
         cal = frame["I3Calibration"]
+        geo = frame["I3Geometry"]
         if self.fadc_gain_key not in frame:
             raise Exception(f"Old FADC gain key {self.fadc_gain_key} not found in frame")
         old_fadc_gains = frame[self.fadc_gain_key]
@@ -38,6 +43,7 @@ class CheckPass3GCDI3Module(I3ConditionalModule):
         cal_o = cal.dom_cal 
         for key, item in cal_o.items():
             if not (key in geo.omgeo and geo.omgeo[key].omtype == dataclasses.I3OMGeo.IceCube):
+                # only checking items in the geometry and in-ice; igonoring IceTop and other non-in-ice pieces
                 continue
             if item.mean_atwd_charge_correction != 1.0 and not math.isnan(item.mean_atwd_charge_correction):
                 raise ValueError(f"mean ATWD charge is not for DOM {key}. Set to {item.mean_atwd_charge_correction}")
@@ -50,8 +56,10 @@ class CheckPass3GCDI3Module(I3ConditionalModule):
                     old_fadc_gains[key]/(self.fadc_corrs[
                         f"{key.string},{key.om}"]))
                 if  corr_applied != 0 and not math.isnan(corr_applied):
-                    raise ValueError(f"FADC gain correction incorrect applied. OLD FADC gain value without {old_fadc_gains[key]} and with  {old_fadc_gains[key]/(self.fadc_corrs[
-                        f"{key.string},{key.om}"])} correction and CORRECTED FADC gain value {item.fadc_gain}. Delta between values {corr_applied}" )
+                    error_number = old_fadc_gains[key]/(self.fadc_corrs[
+                        f"{key.string},{key.om}"])
+                    raise ValueError(f"FADC gain correction incorrect applied. OLD FADC gain value without {old_fadc_gains[key]} and with  {error_number} correction and CORRECTED FADC gain value {item.fadc_gain}. Delta between values {corr_applied}" )
+        self.PushFrame(frame)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
