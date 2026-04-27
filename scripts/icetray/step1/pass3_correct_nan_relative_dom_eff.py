@@ -1,4 +1,7 @@
-"""Utility to check GCD files for known changes for Pass3."""
+
+#!/bin/sh /cvmfs/icecube.opensciencegrid.org/py3-v4.4.2/icetray-start
+#METAPROJECT /cvmfs/icecube.opensciencegrid.org/py3-v4.4.2/RHEL_9_x86_64_v2/metaprojects/icetray/v1.17.0/bin/
+"""Script to check GCD files for nan relative DOM effiency and correct it if necessary."""
 from icecube import icetray
 from icecube.icetray import I3ConditionalModule
 from icecube.icetray import I3Tray

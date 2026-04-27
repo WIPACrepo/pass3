@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Union, Optional, Set
 from manifest_utils import extract_manifest_checksums_from_zip, find_manifest_members_in_zip
-from rest_tools.client import ClientCredentialsAuth
+# from rest_tools.client import ClientCredentialsAuth
 
 
 RunnerInput = tuple[Path, Path, Path, Path, Optional[str]]
@@ -220,13 +220,30 @@ def prepare_inputs(
     return inputs
 
 def get_grl(grl_path: Path) -> list[int]:
-    grl: list[int] = []
-    with grl_path.open("r") as f:
-        for line in f:
-            line = line.strip()
-            if not line:
+    text = grl_path.read_text().strip()
+    if not text:
+        return []
+
+    if text[0] == "{":
+        payload = json.loads(text)
+        runs = payload.get("runs", []) if isinstance(payload, dict) else []
+        grl: list[int] = []
+        for record in runs:
+            if not isinstance(record, dict):
                 continue
-            grl.append(int(line))
+            run = record.get("run")
+            if run is None:
+                continue
+            if bool(record.get("good_i3", False)):
+                grl.append(int(run))
+        return grl
+
+    grl: list[int] = []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        grl.append(int(line))
     return grl
 
 def get_bad_files(bad_files_path: Path) -> list[str]:
