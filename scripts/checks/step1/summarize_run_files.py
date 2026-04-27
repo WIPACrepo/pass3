@@ -20,6 +20,7 @@ from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Dict, List, Set, Optional, Tuple
 from collections import defaultdict
+from utils.estimate_run_location import RunLocationEstimator
 
 
 def extract_run_and_file_number(filename: str) -> Optional[Tuple[int, int]]:
@@ -58,13 +59,65 @@ def parse_date_from_path(path: Path) -> Optional[datetime]:
     return None
 
 
-def get_search_paths(base_dir: Path, search_days: int = 1, year: Optional[int] = None, month: Optional[int] = None) -> List[Path]:
+def get_search_paths(base_dir: Path, search_days: int = 1, year: Optional[int] = None, month: Optional[int] = None, run_number: Optional[int] = None) -> List[Path]:
     """
     Generate list of directories to search based on base_dir and +/- search_days.
     If base_dir contains a date pattern (YYYY/MMDD), search nearby dates.
     If year and month are provided, search all MMDD directories for that month.
+    If run_number is provided, attempt to look up run date and construct target path.
     Otherwise, just return base_dir and recursively search.
     """
+    
+    # If run_number is provided, lookup date
+    if run_number is not None:
+        estimator = RunLocationEstimator()
+        run_date = estimator.get_run_date(run_number)
+        
+        if run_date:
+            print(f"Run {run_number} date found: {run_date.strftime('%Y-%m-%d')}", file=sys.stderr)
+            
+            yyyy = f"{run_date.year:04d}"
+            mmdd = f"{run_date.month:02d}{run_date.day:02d}"
+            
+            # Construct candidate paths
+            # 1. Full structure: base_dir / YYYY / "filtered" / "pass3" / "step1" / MMDD
+            # 2. Year/MMDD structure: base_dir / YYYY / MMDD
+            # 3. Simple MMDD structure: base_dir / MMDD
+            candidates = [
+                base_dir / yyyy / "filtered" / "pass3" / "step1" / mmdd,
+                base_dir / yyyy / mmdd,
+                base_dir / mmdd
+            ]
+            
+            found_paths = []
+            for p in candidates:
+                if p.exists():
+                    print(f"Found candidate path: {p}", file=sys.stderr)
+                    found_paths.append(p)
+            
+            if found_paths:
+                return found_paths
+            
+            # If not found, fall back to searching +/- days if search_days > 0? 
+            # Or just warn. Let's warn and allow fallbacklogic or fail.
+            # But wait, existing logic falls back to [base_dir] if date parsing fails.
+            # If we calculated a date but path doesn't exist, we might want to try to update base_dir to year_dir?
+            
+            # Check if year dir exists at least
+            year_dir = base_dir / yyyy
+            if not year_dir.exists():
+                 # Maybe base_dir is already the year dir? or something else.
+                 pass
+            else:
+                 # If year dir exists but specific MMDD structure failed, maybe MMDD is direct child of year
+                 # Wait, candidates[1] checked expected year/mmdd.
+                 pass
+
+            print(f"Warning: Calculated paths for date {run_date.strftime('%Y-%m-%d')} do not exist.", file=sys.stderr)
+            # Fall through to other logic or Return?
+            # If we specific run number, we probably want to fail or fallback.
+            # Let fall through to 'parse_date_from_path(base_dir)' logic might not help if base_dir is root.
+            
     # If year and month are provided, search all days in that month
     if year is not None and month is not None:
         import calendar
@@ -402,8 +455,8 @@ def main():
     output_dir = args.output_dir if args.output_dir else args.search_directory
     output_dir.mkdir(parents=True, exist_ok=True)
     
-    # Get search paths (pass year/month if provided)
-    search_paths = get_search_paths(args.search_directory, args.search_days, args.year, args.month)
+    # Get search paths (pass year/month/run if provided)
+    search_paths = get_search_paths(args.search_directory, args.search_days, args.year, args.month, args.run)
     print(f"Search paths: {search_paths}", file=sys.stderr)
     
     # Find UUID files
