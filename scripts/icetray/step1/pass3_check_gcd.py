@@ -2,7 +2,7 @@
 from icecube import icetray
 from icecube.icetray import I3ConditionalModule
 from icecube.icetray import I3Tray
-from icecube import dataio
+from icecube import dataioi, dataclasses
 import math
 import json
 import argparse
@@ -37,7 +37,7 @@ class CheckPass3GCDI3Module(I3ConditionalModule):
         # Checking
         cal_o = cal.dom_cal 
         for key, item in cal_o.items():
-            if not (key in geo.omgeo and geo.omgeo[key].omtype == dataio.I3OMGeo.IceCube):
+            if not (key in geo.omgeo and geo.omgeo[key].omtype == dataclasses.I3OMGeo.IceCube):
                 continue
             if item.mean_atwd_charge_correction != 1.0 and not math.isnan(item.mean_atwd_charge_correction):
                 raise ValueError(f"mean ATWD charge is not for DOM {key}. Set to {item.mean_atwd_charge_correction}")
