@@ -29,6 +29,7 @@ class CheckPass3GCDI3Module(I3ConditionalModule):
         pass
 
     def Calibration(self, frame):
+        geo = frame["I3Geometry"]
         cal = frame["I3Calibration"]
         if self.fadc_gain_key not in frame:
             raise Exception(f"Old FADC gain key {self.fadc_gain_key} not found in frame")
@@ -36,6 +37,8 @@ class CheckPass3GCDI3Module(I3ConditionalModule):
         # Checking
         cal_o = cal.dom_cal 
         for key, item in cal_o.items():
+            if not (key in geo.omgeo and geo.omgeo[key].omtype == dataio.I3OMGeo.IceCube):
+                continue
             if item.mean_atwd_charge_correction != 1.0 and not math.isnan(item.mean_atwd_charge_correction):
                 raise ValueError(f"mean ATWD charge is not 1. Set to {item.mean_atwd_charge_correction}")
             if item.mean_fadc_charge_correction != 1.0 and not math.isnan(item.mean_fadc_charge_correction):
