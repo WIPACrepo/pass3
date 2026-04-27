@@ -39,6 +39,7 @@ class CheckPass3GCDI3Module(I3ConditionalModule):
         cal_o = cal.dom_cal 
         for key, item in cal_o.items():
             if not (key in geo.omgeo and geo.omgeo[key].omtype == dataclasses.I3OMGeo.IceCube):
+                # only checking items in the geometry and in-ice; igonoring IceTop and other non-in-ice pieces
                 continue
             if item.mean_atwd_charge_correction != 1.0 and not math.isnan(item.mean_atwd_charge_correction):
                 raise ValueError(f"mean ATWD charge is not 1. Set to {item.mean_atwd_charge_correction}")
