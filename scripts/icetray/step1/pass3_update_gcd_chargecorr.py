@@ -33,7 +33,7 @@ icetray.logging.set_level("INFO")
 def correct_gcd_file(infile: str,
                      outfile: str,
                      fadc_corrections: dict,
-                     fadc_db: dict,
+                     fadc_db: dict = {},
                      mean_atwd_charge = 1.,
                      mean_fadc_charge = 1.):
 
@@ -70,8 +70,8 @@ def correct_gcd_file(infile: str,
                     if ("Original_FADC_Gain" not in frame) or (key not in frame["Original_FADC_Gain"].keys()):
                         key_str = f"{key.string},{key.om}"
                         print(f"FADC gain file  {item.fadc_gain} for DOM {key}")
-                        print(f"FADC gain server {fadc_db[key_str]} for DOM {key}")
-                        print(f"{(item.fadc_gain/fadc_db[key_str] - 1.)*100. }")
+                        if fadc_db: print(f"FADC gain server {fadc_db[key_str]} for DOM {key}")
+                        if fadc_db: print(f"{(item.fadc_gain/fadc_db[key_str] - 1.)*100. }")
                         if "Original_FADC_Gain" not in frame:
                             frame["Original_FADC_Gain"] = dataclasses.I3MapKeyDouble({key: item.fadc_gain})
                         else:
@@ -112,13 +112,13 @@ def parse_json(file: str) -> dict:
     return data
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(prog='dump_muonitron_output')
+    parser = argparse.ArgumentParser(prog='pass3_update_gcd_chargecorr')
     parser.add_argument("-i", "--infile", dest="infile", type=str, required=True)
     parser.add_argument("-o", "--outfile", dest="outfile", type=str, required=True)
     parser.add_argument("--inaudit", dest="inaudit", type=str, required=True)
     parser.add_argument("--outaudit", dest="outaudit", type=str, required=True)
     parser.add_argument("--fadc-correction", dest="fadc_corr", type=str, required=True)
-    parser.add_argument("--fadc-gcddb", dest="fadc_gcddb", type=str, required=True)
+    parser.add_argument("--fadc-gcddb", dest="fadc_gcddb", type=str, required=False)
     args = parser.parse_args()
 
 
@@ -128,13 +128,16 @@ if __name__ == "__main__":
     icetray.logging.log_warn(f"Using database file: {args.fadc_gcddb}")
 
     fadc_corr = parse_json(args.fadc_corr)
-    fadc_gcddb = parse_json(args.fadc_gcddb)
 
     icetray.logging.rotating_files(args.inaudit)
     # Input GCD file audit, look for DOMs with nan error
     rc = run_gcd_audit_pass3(args.infile, nan_error = True, not1_error = False)
 
-    correct_gcd_file(args.infile, args.outfile, fadc_corr, fadc_gcddb)
+    if args.fadc_gcddb:
+        fadc_gcddb = parse_json(args.fadc_gcddb)
+        correct_gcd_file(args.infile, args.outfile, fadc_corr, fadc_gcddb)
+    else:
+        correct_gcd_file(args.infile, args.outfile, fadc_corr)
 
     icetray.logging.rotating_files(args.outaudit)
     rc = run_gcd_audit_pass3(args.outfile, nan_error = True, not1_error = True)
