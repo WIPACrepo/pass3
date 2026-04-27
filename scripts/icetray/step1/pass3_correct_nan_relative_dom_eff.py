@@ -1,18 +1,17 @@
-
 #!/bin/sh /cvmfs/icecube.opensciencegrid.org/py3-v4.4.2/icetray-start
-#METAPROJECT /cvmfs/icecube.opensciencegrid.org/py3-v4.4.2/RHEL_9_x86_64_v2/metaprojects/icetray/v1.17.0/bin/
+#METAPROJECT: icetray/v1.17.0
 """Script to check GCD files for nan relative DOM effiency and correct it if necessary."""
 from icecube import icetray
 from icecube.icetray import I3ConditionalModule
 from icecube.icetray import I3Tray
 from icecube import dataio
 import math
-import json
 import argparse
 from typing import Union, Optional, Set
 from pathlib import Path
+import hashlib
 
-from .pass3_check_gcd import CheckPass3GCDI3Module
+from pass3_check_gcd import CheckPass3GCDI3Module
 
 icetray.set_log_level_for_unit('I3Tray', icetray.I3LogLevel.LOG_TRACE)
 
@@ -20,14 +19,9 @@ class CorrectPass3RelDOMeffGCDI3Module(I3ConditionalModule):
     """Sanity checker for GCD file used in Pass 3"""
     def __init__(self, context):
         I3ConditionalModule.__init__(self, context)
-        self.AddParameter("fadc_gain_correction_json", "file path to the json file with the fadc gain correction factor", None)
-        self.AddParameter("old_fadc_gain_key", "key in GCD file for the old FADC gain. should be a map of OMKey to double", "Original_FADC_Gain" )
 
     def Configure(self):
-        fadc_corr_json = self.GetParameter("fadc_gain_correction_json")
-        self.fadc_gain_key = self.GetParameter("old_fadc_gain_key")
-        with open(fadc_corr_json, "r") as f:
-            self.fadc_corrs = json.load(f)["FADC_gain_correction"]
+        pass
 
     def Geometry(self, frame):
         pass
@@ -36,10 +30,9 @@ class CorrectPass3RelDOMeffGCDI3Module(I3ConditionalModule):
         pass
 
     def Calibration(self, frame):
-        cal = frame["I3Calibration"]
+        calitem = frame["I3Calibration"]
         cal_o = calitem.dom_cal 
         nan_doms = []
-        old_fadc_gains = frame[self.fadc_gain_key]
         # Checking
         for key, item in cal_o.items():
             if math.isnan(item.relative_dom_eff):
@@ -91,13 +84,14 @@ if __name__ == "__main__":
 
     tray.Add(dataio.I3Reader, "reader", Filename=args.inGCD)
 
-    tray.Add(CorrectPass3RelDOMeffGCDI3Module, "dom_rel_eff_nan_checker")
+    tray.Add(CorrectPass3RelDOMeffGCDI3Module, 
+            "dom_rel_eff_nan_checker")
 
     tray.Add(CheckPass3GCDI3Module, "gcd_checker",
              fadc_gain_correction_json=args.corr,
              old_fadc_gain_key="Original_FADC_Gain")
 
-    tray.Add(dataio.I3Writer, "writer", Filename=args.outGCD)
+    tray.Add("I3Writer", "writer", Filename=args.outGCD)
 
     tray.Execute()
 
