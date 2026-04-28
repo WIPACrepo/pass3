@@ -1,8 +1,10 @@
+from __future__ import annotations
+
 import argparse
 import json
 import sys
 from pathlib import Path
-from manifest_utils import extract_manifest_members_from_file, is_manifest_file_path
+from manifest_utils import extract_manifest_members_from_file, extract_manifest_uuid_from_file, is_manifest_file_path
 
 
 DEFAULT_GRL_PATH = Path(__file__).resolve().parents[3] / "data" / "grl.pass3"
@@ -72,12 +74,15 @@ def find_manifest_files(path: Path) -> list[Path]:
     return manifests
 
 
-def check_manifest(manifest_path: Path, output_dir: Path, grl: dict[int, bool]) -> dict[str, list[dict[str, object]] | list[str]]:
+def check_manifest(manifest_path: Path, output_dir: Path, grl: dict[int, bool]) -> dict[str, object]:
     missing: list[tuple[str, str]] = []
     invalid_inputs: list[str] = []
     invalid_run_numbers: list[str] = []
     not_in_grl: list[dict[str, object]] = []
     not_good_i3: list[dict[str, object]] = []
+    input_count_in_grl = 0
+    output_count_in_grl = 0
+    output_count = 0
 
     for infile_name in extract_manifest_members_from_file(manifest_path):
         try:
@@ -90,9 +95,7 @@ def check_manifest(manifest_path: Path, output_dir: Path, grl: dict[int, bool]) 
             not_in_grl.append({"input_file": infile_name, "run": run_number})
             continue
 
-        if not grl[run_number]:
-            not_good_i3.append({"input_file": infile_name, "run": run_number})
-            continue
+        input_count_in_grl += 1
 
         try:
             expected_output = get_outfilename(Path(infile_name)).name
@@ -100,10 +103,24 @@ def check_manifest(manifest_path: Path, output_dir: Path, grl: dict[int, bool]) 
             invalid_inputs.append(infile_name)
             continue
 
-        if not (output_dir / expected_output).exists():
+        output_exists = (output_dir / expected_output).exists()
+        if output_exists:
+            output_count_in_grl += 1
+
+        if not grl[run_number]:
+            not_good_i3.append({"input_file": infile_name, "run": run_number})
+            continue
+
+        if not output_exists:
             missing.append((infile_name, expected_output))
+            continue
+
+        output_count += 1
 
     return {
+        "input_count_in_grl": input_count_in_grl,
+        "output_count_in_grl": output_count_in_grl,
+        "output_count": output_count,
         "missing_outputs": [
             {
                 "input_file": infile_name,
@@ -118,17 +135,36 @@ def check_manifest(manifest_path: Path, output_dir: Path, grl: dict[int, bool]) 
     }
 
 
+def report_has_issues(report: dict[str, object]) -> bool:
+    return any(
+        report[key]
+        for key in ("missing_outputs", "invalid_inputs", "invalid_run_numbers", "not_in_grl", "not_good_i3")
+    )
+
+
 def build_manifest_report(manifest_path: Path, grl: dict[int, bool], grl_path: Path) -> dict[str, object]:
     output_dir = manifest_path.parent
     manifest_members = extract_manifest_members_from_file(manifest_path)
+    manifest_uuid = extract_manifest_uuid_from_file(manifest_path)
     results = check_manifest(manifest_path, output_dir, grl)
     return {
         "manifest": str(manifest_path),
+        "manifest_uuid": manifest_uuid,
         "output_dir": str(output_dir),
         "grl": str(grl_path),
         "input_count": len(manifest_members),
         **results,
     }
+
+
+def write_issue_report(manifest_path: Path, report: dict[str, object]) -> Path:
+    manifest_uuid = report.get("manifest_uuid")
+    filename_stem = str(manifest_uuid) if manifest_uuid else manifest_path.stem
+    report_path = manifest_path.parent / f"{filename_stem}.check_mapping.summary.json"
+    report_with_path = dict(report)
+    report_with_path["report_file"] = str(report_path)
+    report_path.write_text(json.dumps(report_with_path, indent=2, sort_keys=True) + "\n")
+    return report_path
 
 
 def main() -> int:
@@ -158,13 +194,20 @@ def main() -> int:
 
     grl = load_grl(args.grl)
     reports = [build_manifest_report(manifest_path, grl, args.grl) for manifest_path in manifests]
-    had_missing = any(
-        report["missing_outputs"] or report["invalid_inputs"] or report["invalid_run_numbers"] or report["not_in_grl"] or report["not_good_i3"]
-        for report in reports
-    )
+    issue_report_files: list[str] = []
+    for manifest_path, report in zip(manifests, reports):
+        if not report_has_issues(report):
+            continue
+
+        report_path = write_issue_report(manifest_path, report)
+        report["report_file"] = str(report_path)
+        issue_report_files.append(str(report_path))
+
+    had_missing = any(report_has_issues(report) for report in reports)
     print(json.dumps({
         "path": str(args.path),
         "grl": str(args.grl),
+        "issue_report_files": issue_report_files,
         "manifest_count": len(reports),
         "manifests": reports,
     }, indent=2, sort_keys=True))

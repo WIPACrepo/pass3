@@ -70,6 +70,18 @@ def manifest_record_sha512(record: object) -> Optional[str]:
     return None
 
 
+def manifest_record_uuid(record: object) -> Optional[str]:
+    if not isinstance(record, dict):
+        return None
+
+    for key in ("uuid", "bundle_uuid", "bundleUuid"):
+        value = record.get(key)
+        if value:
+            return str(value)
+
+    return None
+
+
 def extract_manifest_members_from_text(text: str) -> list[str]:
     stripped = text.strip()
     if not stripped:
@@ -116,6 +128,55 @@ def extract_manifest_members_from_text(text: str) -> list[str]:
 
 def extract_manifest_members_from_file(manifest_path: Path) -> list[str]:
     return extract_manifest_members_from_text(manifest_path.read_text())
+
+
+def extract_manifest_uuid_from_text(text: str) -> Optional[str]:
+    stripped = text.strip()
+    if not stripped:
+        return None
+
+    if stripped[0] in "[{":
+        try:
+            payload = json.loads(stripped)
+        except json.JSONDecodeError:
+            payload = None
+
+        if isinstance(payload, dict):
+            uuid_value = manifest_record_uuid(payload)
+            if uuid_value:
+                return uuid_value
+
+            files = payload.get("files")
+            if isinstance(files, list):
+                for record in files:
+                    uuid_value = manifest_record_uuid(record)
+                    if uuid_value:
+                        return uuid_value
+
+        if isinstance(payload, list):
+            for record in payload:
+                uuid_value = manifest_record_uuid(record)
+                if uuid_value:
+                    return uuid_value
+
+    for line in stripped.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            record = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+
+        uuid_value = manifest_record_uuid(record)
+        if uuid_value:
+            return uuid_value
+
+    return None
+
+
+def extract_manifest_uuid_from_file(manifest_path: Path) -> Optional[str]:
+    return extract_manifest_uuid_from_text(manifest_path.read_text())
 
 
 def extract_manifest_checksums_from_text(text: str) -> dict[str, Optional[str]]:
