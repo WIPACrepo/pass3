@@ -1,5 +1,5 @@
 from __future__ import annotations
-
+import re
 import json
 from argparse import ArgumentParser
 from pathlib import Path
@@ -7,8 +7,17 @@ from typing import Any
 
 
 def build_parser() -> ArgumentParser:
-    
-    PASS3_CODE_DIR = Path(__file__).resolve().parents[-5]
+   
+    print(list(Path(__file__).resolve().parents))
+    PASS3_CODE_DIR = list(Path(__file__).resolve().parents)[-5]
+
+    parser = ArgumentParser(
+        description=(
+            "Generate an HTCondor DAG that compares Pass2 and Pass3 GCD files for "
+            "runs listed in a GRL file."
+        )
+    )
+
 
     parser.add_argument(
         "--original-gcd-dirs",
@@ -31,20 +40,20 @@ def build_parser() -> ArgumentParser:
     parser.add_argument(
         "--fadc-gain-corrections",
         type=Path,
-        required=True,
-        help="Path to JSON file containing FADC gain corrections."
-        default=PASS3_CODE_DIR / "data/fadc_gain_corrections.json"
+        help="Path to JSON file containing FADC gain corrections.",
+        default=PASS3_CODE_DIR / "main/data/fadc_gain_corrections.json"
     )
     parser.add_argument(
         "--correction-script",
         type=Path,
-        default=PASS3_CODE_DIR / "scripts/icetray/step1/ pass3_correct_nan_relative_dom_eff.py"
+        default=PASS3_CODE_DIR / "main/scripts/icetray/step1/pass3_correct_nan_relative_dom_eff.py",
         help="Comparison script executed by each DAG node.",
     )
     parser.add_argument(
         "--log-dir",
         type=Path,
-        default="/scratch/briedel/pass3_gcd_corrections/logs",
+        default="/scratch/briedel/pass3/pass3_gcd_corrections/logs/",
+        # "/scratch/briedel/pass3_gcd_corrections/logs",
         help="Comparison script executed by each DAG node.",
     )
     parser.add_argument(
@@ -68,11 +77,21 @@ def build_parser() -> ArgumentParser:
 
     return parser
 
+def get_run_number_from_gcd_path(gcd_path: Path) -> int:
+    RUN_NUMBER_PATTERN = re.compile(r"_Run(\d+)_")
+    match = RUN_NUMBER_PATTERN.search(gcd_path.name)
+    if match is None:
+        raise ValueError(f"Could not extract run number from GCD path: {gcd_path}")
+    return int(match.group(1))
+
+
 def build_job_block(
     args,
     original_gcd: Path,
 ) -> str:
     job_name = f"gcd_correction_{original_gcd.stem}"
+
+    run_number = get_run_number_from_gcd_path(original_gcd)
 
     new_gcd = get_output_path(args, original_gcd)
 
@@ -80,12 +99,12 @@ def build_job_block(
         
         f"--ingcd {original_gcd} "
         f"--outgcd {new_gcd} "
-        f"--corrections {fadc_gain_corrections} "
+        f"--corrections {args.fadc_gain_corrections} "
     )
 
     lines = [
-        f"JOB {job_name} gcd_correction",
-        f'VARS {job_name} args="{args}"',
+        f"JOB {job_name} gcd_correction DIR /home/briedel/code/pass3/main/scripts/icetray/step1/",
+        f'VARS {job_name} run="{run_number}" args="{args}"',
         "",
     ]
     return "\n".join(lines)
@@ -96,12 +115,14 @@ def build_submit_description(args) -> str:
         "SUBMIT-DESCRIPTION gcd_correction {",
         f'executable   = {args.correction_script}',
         'arguments    = " $(args)"',
-        f"output       = {args.logdir}/$(run).out",
-        f"error        = {args.logdir}/$(run).err",
+        f"output       = {args.log_dir}/$(run).out",
+        f"error        = {args.log_dir}/$(run).err",
         "log          = /dev/null",
         f"request_cpus   = {args.request_cpus}",
         f"request_memory = {args.request_memory}",
         f"request_disk   = {args.request_disk}",
+        "should_transfer_files = YES",
+        "when_to_transfer_output = ON_EXIT",
         "}",
         "",
     ]
@@ -117,7 +138,7 @@ def build_input_files(args) -> list(Path):
     input_files = set()
     for year_dir in args.original_gcd_dirs.glob("*/"):
         if is_valid_year(year_dir.name):
-            for f in year_dir.glob("filtered/debug.v2/GCD/"):
+            for f in year_dir.glob("filtered/debug.v2/GCD/*.i3.zst"):
                 input_files.add(f)
     return sorted(input_files)
 

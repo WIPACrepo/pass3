@@ -24,10 +24,10 @@ class CorrectPass3RelDOMeffGCDI3Module(I3ConditionalModule):
         pass
 
     def Geometry(self, frame):
-        pass
+        self.PushFrame(frame)
 
     def DetectorStatus(self, frame):
-        pass
+        self.PushFrame(frame)
 
     def Calibration(self, frame):
         calitem = frame["I3Calibration"]
@@ -84,9 +84,11 @@ if __name__ == "__main__":
 
     tray.Add(dataio.I3Reader, "reader", Filename=args.inGCD)
 
+    tray.Add("Dump")
+
     tray.Add(CorrectPass3RelDOMeffGCDI3Module, 
             "dom_rel_eff_nan_checker")
-
+    
     tray.Add(CheckPass3GCDI3Module, "gcd_checker",
              fadc_gain_correction_json=args.corr,
              old_fadc_gain_key="Original_FADC_Gain")
