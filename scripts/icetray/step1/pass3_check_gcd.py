@@ -2,11 +2,7 @@
 from icecube import icetray
 from icecube.icetray import I3ConditionalModule
 from icecube.icetray import I3Tray
-<<<<<<< HEAD
-from icecube import dataioi, dataclasses
-=======
 from icecube import dataio, dataclasses
->>>>>>> 2bdec7b1cb148f58ab569f074b4dddfd59de53bc
 import math
 import json
 import argparse
