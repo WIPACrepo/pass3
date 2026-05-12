@@ -549,6 +549,9 @@ if __name__ == "__main__":
                             duplicate_skip_members,
                             args.transferbundle)
 
+    if not inputs:
+        raise Exception(f"ERROR: NO INPUTS FOR BUNDLE {args.bundle}")
+
     run_parallel(inputs, numcpus)
 
     # TODO: Delete bundle
