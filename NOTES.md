@@ -87,3 +87,62 @@ Skipping run 131243: No Pass2 GCD found for run 131243. Searched:
   /data/exp/IceCube/2018/filtered/level2/0705/Run00131243
 Skipping run 131263: No Pass2 GCD found for run 131263. Searched:
   /data/exp/IceCube/2018/filtered/level2/0710/Run00131263
+
+
+  Exception: Did not finish ['key_32609784_PFRaw_PhysicsFiltering_Run00128987_Subrun00000000_00000060.tar.gz'] from bundle /scratch/04799/tg840985/tmp.v2/2016/1231/f85ec33f-e09e-476d-9fd5-55fac27d0fd2.zip
+
+FileNotFoundError: No GCD found for 128826
+FileNotFoundError: No GCD found for 131264
+FileNotFoundError: No GCD found for 131243
+FileNotFoundError: No GCD found for 133284
+FileNotFoundError: No GCD found for 133408
+
+FileNotFoundError: No GCD found for 129212
+FileNotFoundError: No GCD found for 128826
+
+extracted files:
+Broken files:
+['PFRaw_PhysicsFiltering_Run00127130_Subrun00000000_00000060.tar.gz', 'PFRaw_PhysicsFiltering_Run00127129_Subrun00000000_00000080.tar.gz']
+
+
+broken not yet extracted:
+
+['PFRaw_PhysicsFiltering_Run00127000_Subrun00000000_00000164.tar.gz'] - PnF crash
+
+key_32609784_PFRaw_PhysicsFiltering_Run00128987_Subrun00000000_00000060.tar.gz - gps lost power
+
+
+For 
+
+PFRaw_PhysicsFiltering_Run00136445_Subrun00000000_00000111.tar.gz
+PFRaw_PhysicsFiltering_Run00136445_Subrun00000000_00000112.tar.gz
+PFRaw_PhysicsFiltering_Run00136445_Subrun00000000_00000113.tar.gz
+
+there was an PnF crash: https://icecube-spno.slack.com/archives/C02M5UQPP/p1647609551801449
+
+the pass3_reprocess_PFRaw.py script barfs at some eventheaders inside an If= statement
+
+briedel@cobalt-15 14:08:40  /data/exp/IceCube/2022/filtered/pass3/step1/0318/broken_pfraw
+ 12 $ python3 /home/briedel/code/pass3/main/scripts/icetray/step1/pass3_reprocess_PFRaw.py -i ./PFRaw_PhysicsFiltering_Run00136445_Subrun00000000_00000111.tar.gz -o Pass3_Step1_PhysicsFiltering_Run00136445_Subrun00000000_00000111.tar.gz -g /data/ana/IceCube/2022/filtered/debug.v2/GCD/OnlinePass3_IC86.2021_data_Run00136445_82_663_GCD.i3.zst
+Warning in <UnknownClass::SetDisplay>: DISPLAY not set, setting it to 144.92.100.50:0.0
+pass3_reprocess_PFRaw.py:79 WARNING: GCD path and file: /data/ana/IceCube/2022/filtered/debug.v2/GCD OnlinePass3_IC86.2021_data_Run00136445_82_663_GCD.i3.zst
+i3tray.py:46 DEBUG: Adding Anonymous Module of type '<function Fix_LeapSecond at 0x7fd3793418a0>' with name 'Fix_LeapSecond_0000'
+base_processing.py:90 WARNING: Disabled: Wavedeform bypass condition.
+i3tray.py:46 DEBUG: Adding Anonymous Segment of type 'online_filters' with name 'online_filters_0000'
+i3tray.py:46 DEBUG: Adding Anonymous Module of type '<function Cascade_filter.<locals>.CascadeFilterSelect at 0x7fd36b89c040>' with name 'CascadeFilterSelect_0000'
+i3tray.py:46 DEBUG: Adding Anonymous Module of type '<function L2Reco.<locals>.FindBestTrack at 0x7fd36b89c7c0>' with name 'FindBestTrack_0000'
+i3tray.py:46 DEBUG: Adding Anonymous Module of type '<function alert_event_extractor.<locals>.unhide_QEventHeader at 0x7fd36b8b1300>' with name 'unhide_QEventHeader_0000'
+i3tray.py:46 DEBUG: Adding Anonymous Module of type '<function alert_event_extractor.<locals>.cleaup_QEventHeader at 0x7fd36b8b1620>' with name 'cleaup_QEventHeader_0000'
+Initializing cpandel parameterization ... done
+I3Module.cxx:141  ERROR : Base_DOMCleaning_baddomclean: Exception thrown
+Traceback (most recent call last):
+  File "/home/briedel/code/pass3/main/scripts/icetray/step1/pass3_reprocess_PFRaw.py", line 269, in <module>
+    tray.Execute()
+  File "/cvmfs/icecube.opensciencegrid.org/py3-v4.4.2/RHEL_9_x86_64_v2/metaprojects/icetray/v1.17.0/lib/python3.12/site-packages/icecube/icetray/i3tray.py", line 223, in Execute
+    super().Execute()
+  File "/cvmfs/icecube.opensciencegrid.org/py3-v4.4.2/RHEL_9_x86_64_v2/metaprojects/icetray/v1.17.0/lib/python3.12/site-packages/icecube/online_filterscripts/base_segments/onlinecalibration.py", line 36, in <lambda>
+    If=lambda frame: frame["I3EventHeader"].run_id < 140808)
+                     ~~~~~^^^^^^^^^^^^^^^^^
+KeyError: 'I3EventHeader'
+
+One can open the files and the "broken" eventheaders in dataio-shovel and with a separate icetray script with the same results. this needs further investigation
