@@ -8,7 +8,6 @@ import subprocess
 import tempfile
 import time
 import zipfile
-import asyncio
 import concurrent.futures
 from datetime import datetime, timezone
 from pathlib import Path
@@ -18,6 +17,10 @@ from manifest_utils import extract_manifest_checksums_from_zip, find_manifest_me
 
 
 RunnerInput = tuple[Path, Path, Path, Path, Optional[str]]
+GCDLookupResult = dict[str, str]
+SCRIPT_DIR = Path(__file__).resolve().parent
+REPO_ROOT = SCRIPT_DIR.parents[2]
+DATA_DIR = REPO_ROOT / "data"
 
 def normalize_member_path(path: Union[str, Path]) -> str:
     s = str(path).strip()
@@ -32,7 +35,7 @@ def remove_extension(path: Path) -> Path:
     suffixes = ''.join(path.suffixes)
     return Path(str(path).replace(suffixes, ''))
 
-def get_gcd(infile: Path, gcddir: Path) -> Path:
+def get_gcd(infile: Path, gcddir: Path) -> GCDLookupResult:
     if not gcddir.exists():
         raise FileNotFoundError("No GCD dir")
     # Assuming format in infile name is PFRaw_PhysicsFiltering_Run<RunNumber>_...
@@ -43,7 +46,7 @@ def get_gcd(infile: Path, gcddir: Path) -> Path:
                 "msg": f"Multiple GCD files {gcdfiles} found for run {runnum} in {gcddir}"}
     if len(gcdfiles) == 1:
         return {"status": "SUCCESS",
-                "gcdfile": f"{gcdfiles[0]}"}    
+                "gcdfile": f"{gcdfiles[0]}"}
     return {"status": "ERROR", 
             "msg": f"No GCD file found for run {runnum} in {gcddir}"}
 
@@ -136,6 +139,7 @@ def prepare_inputs(
     transfer_bundle: bool = False,
 ) -> list[RunnerInput]:
     outdir.mkdir(parents=True, exist_ok=True)
+    bad_file_members = {normalize_member_path(path) for path in bad_files}
 
     MMDD = get_MMDD(bundle)
     year = None
@@ -207,14 +211,14 @@ def prepare_inputs(
 
     inputs: list[RunnerInput] = []
     for f in infiles:
-        if duplicate_skip_members is not None:
-            if normalize_member_path(f) in duplicate_skip_members:
-                continue
+        normalized_member = normalize_member_path(f)
+        if duplicate_skip_members is not None and normalized_member in duplicate_skip_members:
+            continue
         try:
             runnum = get_run_number(f)
         except Exception:
             print(f"WARNING: CAN NOT GET RUN NUMBER FROM FILENAME {f}")
-        if (runnum in grl) and (f not in bad_files):
+        if (runnum in grl) and (normalized_member not in bad_file_members):
             # Get expected sha512 from manifest by matching basename
             filename_basename = Path(f).name
             expected_sha512 = manifest_checksums.get(filename_basename)
@@ -259,6 +263,30 @@ def get_bad_files(bad_files_path: Path) -> list[str]:
             bad_files.append(line)
     return bad_files
 
+def get_optional_bad_files(bad_files_path: Optional[Path]) -> list[str]:
+    if bad_files_path is None:
+        return []
+    if not bad_files_path.exists():
+        print(f"Warning: temporary bad files list {bad_files_path} does not exist")
+        return []
+    return get_bad_files(bad_files_path)
+
+def get_optional_bad_runs(bad_runs_path: Optional[Path]) -> list[int]:
+    if bad_runs_path is None:
+        return []
+    if not bad_runs_path.exists():
+        print(f"Warning: temporary bad runs list {bad_runs_path} does not exist")
+        return []
+
+    bad_runs: list[int] = []
+    with bad_runs_path.open("r") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            bad_runs.append(int(line))
+    return bad_runs
+
 def check_i3_file(infile: Path) -> bool:
     print(f"Checking whether {infile} is a valid i3 file.")
     try:
@@ -275,7 +303,9 @@ def check_i3_file(infile: Path) -> bool:
 
 def check_gcd_file(gcdfile: Path) -> bool:
     print(f"Checking whether {gcdfile} is a good GCD file.")
-    cmd = f"python3 /opt/pass3/scripts/icetray/step1/pass3_check_gcd.py -g {gcdfile} --corrections /opt/pass3/data/average_FADC_gain_bias_corrections.json"
+    check_script = SCRIPT_DIR / "pass3_check_gcd.py"
+    corrections_file = DATA_DIR / "average_FADC_gain_bias_corrections.json"
+    cmd = f"python3 {check_script} -g {gcdfile} --corrections {corrections_file}"
     try:
         subprocess.run(cmd, shell=True, check=True)
     except subprocess.CalledProcessError:
@@ -302,11 +332,13 @@ def runner(infiles: RunnerInput) -> dict:
     tmpdir = Path(tempfile.mkdtemp(dir=str(bundle.parent)))
 
     # Getting the appropriate GCD file for a the run
-    gcd = get_gcd(infile, gcddir)
-    if isinstance(gcd, dict) and gcd.get("status") == "ERROR":
-        return {"status": "ERROR", "msg": gcd.get("msg", "Unknown error getting GCD file")}
-    elif isinstance(gcd, dict) and gcd.get("status") == "SUCCESS":
-        gcd = Path(gcd.get("gcdfile"))
+    gcd_result = get_gcd(infile, gcddir)
+    if gcd_result.get("status") == "ERROR":
+        return {"status": "ERROR", "msg": gcd_result.get("msg", "Unknown error getting GCD file")}
+    gcdfile = gcd_result.get("gcdfile")
+    if gcd_result.get("status") != "SUCCESS" or gcdfile is None:
+        return {"status": "ERROR", "msg": f"Unexpected GCD lookup result for {infile}: {gcd_result}"}
+    gcd = Path(gcdfile)
 
     if not check_gcd_file(gcd):
         return {"status": "ERROR", 
@@ -433,7 +465,7 @@ def runner(infiles: RunnerInput) -> dict:
         "outfile": {"path": f"{outfile}", "sha512sum": f"{sha512sum}"},
     }
 
-def get_year_filepath(file_path: str) -> str:
+def get_year_filepath(file_path: Union[str, Path]) -> str:
     return str(file_path).split("/")[-3]
 
 def get_date_filepath(file_path: Union[str, Path]) -> str:
@@ -518,8 +550,8 @@ if __name__ == "__main__":
         type=Path,
         required=False,
     )
-    parser.add_argument("--temp-bad-files", help="file with files that are known to be bad", type=Path, required=False)
-    parser.add_argument("--temp-bad-runs", help="file with runs that are in the GRL but currently fail", type=Path, required=False)
+    parser.add_argument("--temp-bad-files", help="file with files that are known to be bad", type=Path, required=False, default=DATA_DIR / "temp_bad_files")
+    parser.add_argument("--temp-bad-runs", help="file with runs that are in the GRL but currently fail", type=Path, required=False, default=DATA_DIR / "temp_bad_runs_in_grl")
     args = parser.parse_args()
 
     if args.maxnumcpus == 0:
@@ -538,6 +570,15 @@ if __name__ == "__main__":
 
     grl = get_grl(args.grl)
     badfiles = get_bad_files(args.badfiles)
+    temp_bad_runs = set(get_optional_bad_runs(args.temp_bad_runs))
+    if temp_bad_runs:
+        grl = [run for run in grl if run not in temp_bad_runs]
+        print(f"Removed {len(temp_bad_runs)} temporarily bad runs from GRL consideration")
+
+    temp_bad_files = get_optional_bad_files(args.temp_bad_files)
+    if temp_bad_files:
+        badfiles = badfiles + temp_bad_files
+        print(f"Loaded {len(temp_bad_files)} temporarily bad files")
 
     duplicate_skip_members: Optional[Set[str]] = None
     if args.duplicate_skip_json is not None:
