@@ -146,3 +146,6 @@ Traceback (most recent call last):
 KeyError: 'I3EventHeader'
 
 One can open the files and the "broken" eventheaders in dataio-shovel and with a separate icetray script with the same results. this needs further investigation
+
+
+YEAR=2020; MONTH=2; python3 /home1/04799/tg840985/pass3/scripts/submit/step1/submit_stampede3.py --container /scratch/04799/tg840985/pass3_cvmfs_v4.4.2_icetray_v1.17.0_arm.sif --submitfile /home1/04799/tg840985/pass3/submit_files/${YEAR}/${YEAR}_${MONTH}_new_gcd.slurm --checksum-file /home1/04799/tg840985/pass3/data/checksums.sha512sum --year ${YEAR} --month ${MONTH} --gcddir /work/04799/tg840985/stampede3/GCD.v2/ --multiprogfile /home1/04799/tg840985/pass3/submit_files/${YEAR}/${YEAR}_${MONTH}_new_gcd.multiprog --slurmqueue gg --numcores 100 --allocation PHY20012 --grl /home1/04799/tg840985/pass3/data/grl.pass3 --badfiles /home1/04799/tg840985/pass3/data/known_bad_files --cpuarch aarch64 --bundlesready --bundledir $SCRATCH/tmp.v2/ --outdir $SCRATCH/testout.v2/${YEAR} --duplicate-skip-dir /home1/04799/tg840985/pass3/submit_files/${YEAR}/skip/
