@@ -39,10 +39,13 @@ def get_gcd(infile: Path, gcddir: Path) -> Path:
     runnum = get_run_number(infile)
     gcdfiles = list(gcddir.glob(f"*{runnum}*"))
     if len(gcdfiles) > 1:
-        raise Exception(f"Multiple GCD files {gcdfiles} for run {runnum}")
+        return {"status": "ERROR",
+                "msg": f"Multiple GCD files {gcdfiles} found for run {runnum} in {gcddir}"}
     if len(gcdfiles) == 1:
-        return gcdfiles[0]
-    raise FileNotFoundError(f"No GCD found for {runnum}")
+        return {"status": "SUCCESS",
+                "gcdfile": f"{gcdfiles[0]}"}    
+    return {"status": "ERROR", 
+            "msg": f"No GCD file found for run {runnum} in {gcddir}"}
 
 def get_outfilename(infile: Path) -> Path:
     infilename = str(remove_extension(infile))
@@ -300,9 +303,14 @@ def runner(infiles: RunnerInput) -> dict:
 
     # Getting the appropriate GCD file for a the run
     gcd = get_gcd(infile, gcddir)
+    if isinstance(gcd, dict) and gcd.get("status") == "ERROR":
+        return {"status": "ERROR", "msg": gcd.get("msg", "Unknown error getting GCD file")}
+    elif isinstance(gcd, dict) and gcd.get("status") == "SUCCESS":
+        gcd = Path(gcd.get("gcdfile"))
 
     if not check_gcd_file(gcd):
-        return {"status": "ERROR", "msg": f"GCD file {gcd} is not correct."}
+        return {"status": "ERROR", 
+                "msg": f"GCD file {gcd} is not correct."}
 
     print(f"Copying GCD file: {gcd}")
     shutil.copy(gcd, tmpdir / gcd.name)
@@ -510,6 +518,8 @@ if __name__ == "__main__":
         type=Path,
         required=False,
     )
+    parser.add_argument("--temp-bad-files", help="file with files that are known to be bad", type=Path, required=False)
+    parser.add_argument("--temp-bad-runs", help="file with runs that are in the GRL but currently fail", type=Path, required=False)
     args = parser.parse_args()
 
     if args.maxnumcpus == 0:
