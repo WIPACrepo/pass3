@@ -21,7 +21,7 @@ def get_member_sha512sum(bundle_zip_path: Path, member_name: str) -> str:
     h = hashlib.sha512()
     buffer = bytearray(8192 * 1024)
     view = memoryview(buffer)
-
+    print(f"Bundle: {bundle_zip_path}, member: {member_name}")
     with zipfile.ZipFile(bundle_zip_path) as zf:
         with zf.open(member_name) as member_fh:
             while True:
