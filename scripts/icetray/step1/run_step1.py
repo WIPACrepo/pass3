@@ -2,12 +2,14 @@ import argparse
 import hashlib
 import json
 import os
+import sys
 import random
 import shutil
 import subprocess
 import tempfile
 import time
 import zipfile
+import re
 import concurrent.futures
 from datetime import datetime, timezone
 from pathlib import Path
@@ -112,8 +114,13 @@ def get_bundle(bundle: Path, outdir: Path, retry_attempts: int = 5):
 def get_run_number(file: Union[str, Path]) -> int:
     s = str(file)
     try:
+        match = re.search(r"Run0*(\d+)", s)
+        if match:
+            return int(match.group(1))
         if s.startswith("ukey") or s.startswith("key"):
             return int(s.split('_')[4][3:])
+        if s.startswith("PFRaw_PhysicsTrig_PhysicsFiltering") or s.startswith("PFRaw_TestData_RandomFiltering"):
+            return int(s.split("_")[3][3:])
         return int(s.split('_')[2][3:])
     except Exception:
         raise ValueError(f"File {s} is causing issues when extracting run number")
@@ -210,6 +217,7 @@ def prepare_inputs(
         manifest_checksums = {}
 
     inputs: list[RunnerInput] = []
+    runnum = None
     for f in infiles:
         normalized_member = normalize_member_path(f)
         if duplicate_skip_members is not None and normalized_member in duplicate_skip_members:
@@ -217,7 +225,9 @@ def prepare_inputs(
         try:
             runnum = get_run_number(f)
         except Exception:
-            print(f"WARNING: CAN NOT GET RUN NUMBER FROM FILENAME {f}")
+            print(f"WARNING: CAN NOT GET RUN NUMBER FROM FILENAME {f} in bundle {bundle}", file=sys.stderr)
+        if runnum is None:
+            continue
         if (runnum in grl) and (normalized_member not in bad_file_members):
             # Get expected sha512 from manifest by matching basename
             filename_basename = Path(f).name
