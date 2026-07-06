@@ -102,6 +102,8 @@ tray.Add(dataio.I3Reader, "reader", filenamelist=[args.GCD, args.INPUT],
 tray.AddModule("Delete", "scrub_old_qfilter",
                keys=["QFilterMask"])
 
+tray.Add('Rename','rename_tree',keys=['FilterMask','Pass1FilterMask'])
+
 # If needed, move P Frame to Q Frame...
 # Note: most PFRaw from pole files are P frame only
 if args.QIFY:
