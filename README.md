@@ -79,6 +79,8 @@ this will look for duplicates across the contents of different bundles.
 There are bundles that contain the same file. This internal algorithm
 picks one of the two duplicates to process and ignores the other.
 
+On Vista, we need to limit the number of cores. There are total of 144 cores
+and 237 GB per Grace-Grace node. The code uses ~2.2 GB RAM per instance.
 
 ### Submitting Jobs
 
