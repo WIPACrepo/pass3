@@ -184,10 +184,12 @@ def write_slurm_file(file: Path,
         # f.write(f"#SBATCH -A {numnodes}\n")
         f.write(f"\n")
         f.write(f"echo `date`\n\n")
+        # else there will be lots of errors
         f.write(f"LD_PRELOAD=\n")
         f.write(f"\n")
         for i in range(multiprogfileincrements):
-            multiprogfile_inc = multiprogfile.parent / (multiprogfile.name + str(i)) 
+            multiprogfile_inc = multiprogfile.parent / (multiprogfile.name + str(i))
+            # it is skipping execution when there is a .done file. This is to allow for resubmission of the job if it fails partway through.
             f.write(f"if [ ! -e {multiprogfile_inc}.done ]; then\n")
             f.write(f"echo Starting {multiprogfile_inc}\n")
             f.write(f"echo `date`\n")
@@ -224,14 +226,18 @@ def write_srun_multiprog(file: Path,
             year = get_year_filepath(str(bundle))
             date = get_date_filepath(str(bundle))
             local_bundle = local_bundle_by_archive.get(bundle, bundle) if local_bundle_by_archive else bundle
+            # TACC has their own apptainer binary
             f.write(f"{i}  /opt/apps/tacc-apptainer/1.3.3/bin/apptainer ")
             f.write(f"exec -B /home1/04799/tg840985/pass3:/opt/pass3 ")
+            # Moving the heavy pieces, i.e. splines, out of the container
+            # Just makes it easier to build the container
             f.write(f"-B /work/04799/tg840985/vista/splines/splines:/cvmfs/icecube.opensciencegrid.org/data/photon-tables/splines ")
             f.write(f"-B /work2 -B /scratch {apptainer_container} {env_shell} ")
             f.write(f"python3 {script} --bundle {local_bundle} --gcddir {gcddir} ")
             f.write(f"--outdir {outdir}/{year}/{date} --checksum {checksum} ")
             f.write(f"--scratchdir {scratchdir} --grl {grl} ")
             f.write(f"--badfiles {badfiles} ")
+            # If there is a duplicate skip json file for this bundle, pass it to the script
             if duplicate_skip_json_by_bundle is not None and bundle in duplicate_skip_json_by_bundle:
                 f.write(f" --duplicate-skip-json {duplicate_skip_json_by_bundle[bundle]}")
             if transferbundles:
@@ -249,7 +255,9 @@ def write_srun_multiprog(file: Path,
 
 def month_in_path(file_path: str,
                   month: int) -> bool:
-    """Example path on Ranch: /stornext/ranch_01/ranch/projects/TG-PHY150040/data/exp/IceCube/2020/unbiased/PFRaw/0420/7202275ab7a111eb8013bedaff42a7c6.zip"""
+    """Example path on Ranch:
+    old ranch: /stornext/ranch_01/ranch/projects/TG-PHY150040/data/exp/IceCube/2020/unbiased/PFRaw/0420/7202275ab7a111eb8013bedaff42a7c6.zip
+    new ranch: /scoutfs/projects/TG-PHY150040/data/exp/IceCube/2020/unbiased/PFRaw/0420/7202275ab7a111eb8013bedaff42a7c6.zip"""
     if month ==  int(get_date_filepath(file_path)[0:2]):
         return True
     return False
@@ -261,7 +269,7 @@ def year_in_path(file_path: str,
     return False
 
 def get_file_checksums(file_path: Path) -> dict[Path, str]:
-    """"Reading in the checksum file"""
+    """Reading in the checksum file"""
     tmp_checksums: dict[Path, str] = {}
     with Path.open(file_path, "r") as f:
         while line := f.readline():

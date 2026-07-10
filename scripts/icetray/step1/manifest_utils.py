@@ -4,7 +4,11 @@ from pathlib import Path
 from typing import Optional
 
 
-def is_manifest_member_name(member_name: str, archive_key: Optional[str] = None) -> bool:
+def is_manifest_member_name(
+        member_name: str,
+        archive_key: Optional[str] = None
+    ) -> bool:
+    """Return True if the given member name is a manifest file name."""
     basename = Path(member_name).name
     if archive_key is not None:
         return basename in {
@@ -16,11 +20,19 @@ def is_manifest_member_name(member_name: str, archive_key: Optional[str] = None)
     return lower.endswith("metadata.ndjson") or lower.endswith(".metadata.json")
 
 
-def is_manifest_file_path(path: Path, archive_key: Optional[str] = None) -> bool:
+def is_manifest_file_path(
+        path: Path,
+        archive_key: Optional[str] = None
+    ) -> bool:
+    """Return True if the given path is a manifest file."""
     return path.is_file() and is_manifest_member_name(path.name, archive_key=archive_key)
 
 
-def find_manifest_members_in_zip(bundle_zip_path: Path, archive_key: Optional[str] = None) -> list[str]:
+def find_manifest_members_in_zip(
+        bundle_zip_path: Path,
+        archive_key: Optional[str] = None
+    ) -> list[str]:
+    """Return a list of manifest member names in the given zip file."""
     with zipfile.ZipFile(bundle_zip_path) as zf:
         return sorted(
             member for member in zf.namelist()
@@ -28,7 +40,11 @@ def find_manifest_members_in_zip(bundle_zip_path: Path, archive_key: Optional[st
         )
 
 
-def read_manifest_from_zip(bundle_zip_path: Path, archive_key: Optional[str] = None) -> Optional[tuple[str, str]]:
+def read_manifest_from_zip(
+        bundle_zip_path: Path,
+        archive_key: Optional[str] = None
+    ) -> Optional[tuple[str, str]]:
+    """Return the text of the first manifest member in the given zip file."""
     manifest_members = find_manifest_members_in_zip(bundle_zip_path, archive_key=archive_key)
     if not manifest_members:
         return None
@@ -40,7 +56,10 @@ def read_manifest_from_zip(bundle_zip_path: Path, archive_key: Optional[str] = N
     return text, manifest_member
 
 
-def manifest_record_member(record: object) -> Optional[str]:
+def manifest_record_member(
+        record: object
+    ) -> Optional[str]:
+    """"Return the member name from a manifest record, if present."""
     if isinstance(record, str):
         return record.strip() or None
 
@@ -55,7 +74,9 @@ def manifest_record_member(record: object) -> Optional[str]:
     return None
 
 
-def manifest_record_sha512(record: object) -> Optional[str]:
+def manifest_record_sha512(
+        record: object
+    ) -> Optional[str]:
     if not isinstance(record, dict):
         return None
 
@@ -70,7 +91,9 @@ def manifest_record_sha512(record: object) -> Optional[str]:
     return None
 
 
-def manifest_record_uuid(record: object) -> Optional[str]:
+def manifest_record_uuid(
+        record: object
+    ) -> Optional[str]:
     if not isinstance(record, dict):
         return None
 
@@ -82,7 +105,9 @@ def manifest_record_uuid(record: object) -> Optional[str]:
     return None
 
 
-def extract_manifest_members_from_text(text: str) -> list[str]:
+def extract_manifest_members_from_text(
+        text: str
+    ) -> list[str]:
     stripped = text.strip()
     if not stripped:
         return []
@@ -126,11 +151,15 @@ def extract_manifest_members_from_text(text: str) -> list[str]:
     return members
 
 
-def extract_manifest_members_from_file(manifest_path: Path) -> list[str]:
+def extract_manifest_members_from_file(
+        manifest_path: Path
+    ) -> list[str]:
     return extract_manifest_members_from_text(manifest_path.read_text())
 
 
-def extract_manifest_uuid_from_text(text: str) -> Optional[str]:
+def extract_manifest_uuid_from_text(
+        text: str
+    ) -> Optional[str]:
     stripped = text.strip()
     if not stripped:
         return None
@@ -175,11 +204,15 @@ def extract_manifest_uuid_from_text(text: str) -> Optional[str]:
     return None
 
 
-def extract_manifest_uuid_from_file(manifest_path: Path) -> Optional[str]:
+def extract_manifest_uuid_from_file(
+        manifest_path: Path
+    ) -> Optional[str]:
     return extract_manifest_uuid_from_text(manifest_path.read_text())
 
 
-def extract_manifest_checksums_from_text(text: str) -> dict[str, Optional[str]]:
+def extract_manifest_checksums_from_text(
+        text: str
+    ) -> dict[str, Optional[str]]:
     stripped = text.strip()
     if not stripped:
         return {}
@@ -217,7 +250,10 @@ def extract_manifest_checksums_from_text(text: str) -> dict[str, Optional[str]]:
     return checksums
 
 
-def extract_manifest_checksums_from_zip(bundle_zip_path: Path, archive_key: Optional[str] = None) -> dict[str, Optional[str]]:
+def extract_manifest_checksums_from_zip(
+        bundle_zip_path: Path,
+        archive_key: Optional[str] = None
+    ) -> dict[str, Optional[str]]:
     checksums: dict[str, Optional[str]] = {}
     for manifest_member in find_manifest_members_in_zip(bundle_zip_path, archive_key=archive_key):
         with zipfile.ZipFile(bundle_zip_path) as zf:

@@ -40,7 +40,6 @@ def remove_extension(path: Path) -> Path:
 def get_gcd(infile: Path, gcddir: Path) -> GCDLookupResult:
     if not gcddir.exists():
         raise FileNotFoundError("No GCD dir")
-    # Assuming format in infile name is PFRaw_PhysicsFiltering_Run<RunNumber>_...
     runnum = get_run_number(infile)
     gcdfiles = list(gcddir.glob(f"*{runnum}*"))
     if len(gcdfiles) > 1:
@@ -155,6 +154,7 @@ def prepare_inputs(
     except Exception:
         year = None
 
+    # Making sure we have the bundle in scratchdir, either by copying it or transferring it from tape. If needs to be transfered from tape you must have the --transferbundle flag set and the bundle must be on tape. If it is already in scratchdir, we will use that copy.
     if (scratchdir / bundle.name).exists():
         bundle_loc = scratchdir / bundle.name
         bundle_sha512sum = get_sha512sum(bundle_loc)
@@ -237,6 +237,7 @@ def prepare_inputs(
     return inputs
 
 def get_grl(grl_path: Path) -> list[int]:
+    """Reading good run list from file. The file can be either a JSON file with a "runs" key or a simple text file with one run number per line. The JSON file should be i3live generated."""
     text = grl_path.read_text().strip()
     if not text:
         return []

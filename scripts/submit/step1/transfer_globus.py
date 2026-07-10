@@ -1,3 +1,8 @@
+"""
+This is an attempt at using the Globus SDK to submit a transfer job from one endpoint to another. I couldn't get this to work with the Globus SDK. Simply logging didn't work.
+"""
+
+
 import argparse
 
 import globus_sdk
