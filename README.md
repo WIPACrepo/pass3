@@ -393,3 +393,98 @@ END {
     }
 }' | xargs grep -E "Exception: Did not finish \[.*\] from bundle /scratch/04799/tg840985/tmp\.v2/.*"
 ```
+
+
+### Finding the missing files
+
+There are gaps in the bundles, i.e. for run 123456 you don't have file number 
+10, 74, 200. Not sure where these files went, at least they are not in the 
+bundles or the manifest for the bundle. This script will look through the 
+manifests and look for these missing file numbers
+
+```
+import json
+import re
+from collections import defaultdict
+from pathlib import Path
+
+def map_and_check_runs(directory_path, file_ending=".json"):
+    if not file_ending.startswith('.'):
+        file_ending = f".{file_ending}"
+
+    run_mapping = defaultdict(set)
+    regex_pattern = re.compile(r'Run(\d+)_Subrun\d+_(\d+)\.')
+    target_dir = Path(directory_path)
+    
+    if not target_dir.is_dir():
+        print(f"Error: The directory '{directory_path}' does not exist.")
+        return None, None
+
+    print(f"Searching for '*{file_ending}' files in: {target_dir.resolve()}...\n")
+
+    # 1. Parse files and build the mapping
+    for file_path in target_dir.rglob(f"*{file_ending}"):
+        with open(file_path, 'r') as f:
+            try:
+                data = json.load(f)
+            except json.JSONDecodeError:
+                print(f"Warning: Invalid JSON in -> {file_path}")
+                continue
+
+            file_entries = data.get("files", [])
+            for entry in file_entries:
+                file_name = entry.get("fileName", "")
+                match = regex_pattern.search(file_name)
+                
+                if match:
+                    run_num = int(match.group(1))
+                    file_num = int(match.group(2))
+                    run_mapping[run_num].add(file_num)
+
+    final_mapping = {run: sorted(list(files)) for run, files in run_mapping.items()}
+    
+    # 2. Check for continuity
+    discontinuous_runs = {}
+    
+    for run, files in final_mapping.items():
+        if not files:
+            continue
+            
+        # If the difference between the max and min file numbers doesn't match 
+        # the total number of files minus one, there is a gap.
+        if max(files) - min(files) != len(files) - 1:
+            # Generate the full expected sequence from min to max
+            expected_sequence = set(range(min(files), max(files) + 1))
+            # Find the difference between the expected sequence and actual files
+            missing_files = sorted(list(expected_sequence - set(files)))
+            
+            discontinuous_runs[run] = {
+                "present_files": files,
+                "missing_files": missing_files
+            }
+
+    return final_mapping, discontinuous_runs
+
+# ==========================================
+# Example Usage
+# ==========================================
+if __name__ == "__main__":
+    my_directory = "./my_data_folder" 
+    my_file_ending = ".json" 
+    
+    # Unpack the two returned dictionaries
+    all_runs, bad_runs = map_and_check_runs(my_directory, my_file_ending)
+    
+    if all_runs is not None:
+        print("--- Discontinuous Runs Found ---")
+        if bad_runs:
+            for run, details in bad_runs.items():
+                print(f"\nRun {run} is missing files!")
+                print(f"Missing file numbers: {details['missing_files']}")
+        else:
+            print("All runs have perfectly continuous file numbers!")
+            
+        # If you still want to see the full mapping of all files, you can print it here:
+        # print("\n--- Full Run Mapping ---")
+        # print(json.dumps(all_runs, indent=4))
+```
