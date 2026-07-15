@@ -142,6 +142,8 @@ An example "program" line for multiprog file:
 0  /opt/apps/tacc-apptainer/1.3.3/bin/apptainer exec -B /home1/04799/tg840985/pass3:/opt/pass3 -B /work/04799/tg840985/vista/splines/splines:/cvmfs/icecube.opensciencegrid.org/data/photon-tables/splines -B /work2 -B /scratch /scratch/04799/tg840985/pass3_cvmfs_v4.4.2_icetray_v1.17.0_arm.sif /cvmfs/icecube.opensciencegrid.org/py3-v4.4.2/RHEL_9_aarch64/metaprojects/icetray/v1.17.0/bin/icetray-shell python3 /opt/pass3/scripts/icetray/step1/run_step1.py --bundle /scratch/04799/tg840985/tmp.v2/2022/0101/24a633c4f11c11ecb5b232208fe3aaeb.zip --gcddir /work2/04799/tg840985/stampede3/GCD.v2 --outdir /scratch/04799/tg840985/testout.v2/2022/0101 --checksum 3e08159c72bb6e7a37aaeb6ae0389ba8aa6d98c14b90e9296c6e77f8544ebb4f9bb241a479443b4707e5f53db4bbe9a542774a98ad197907f0dad2b645e40254 --scratchdir /scratch/04799/tg840985/tmp.v2/2022 --grl /home1/04799/tg840985/pass3/data/grl.pass3 --badfiles /home1/04799/tg840985/pass3/data/known_bad_files  --duplicate-skip-json /home1/04799/tg840985/pass3/submit_files/2022/skip/24a633c4f11c11ecb5b232208fe3aaeb.zip.duplicate_skip.json --maxnumcpus 100
 ```
 
+`0`: is a label for the program in the multiprog file.
+`/opt/apps/tacc-apptainer/1.3.3/bin/apptainer`: Apptainer is a Go binary, so you can just grab it without loading the module
 ` -B /home1/04799/tg840985/pass3:/opt/pass3`: Gets the pass3 code pieces into the container
 `-B /work/04799/tg840985/vista/splines/splines:/cvmfs/icecube.opensciencegrid.org/data/photon-tables/spline`:  the necessary splines for the realtime filter:
 
@@ -162,7 +164,8 @@ files in the bundle and applies `pass3_reprocess_PFRaw.py` to the `PFRaw`
 files in the bundle. The bundles only contain a manifest file (earlier 
 years it is a `*.json` file with a single json object for all file, in 
 later years it is `*.ndjson` with each file being on a new line as a 
-json object). The `PFRaw` files end in `*.tar.gz`. 
+json object). The `PFRaw` files end in `*.tar.gz`. The `PFRaw` filenames
+frequently esp in the earliest years. 
 
 The `concurrent.futures.ProcessPoolExecutor` allows a mapping list of 
 inputs to N workers (each being a Python `subprocess`) and monitors the 

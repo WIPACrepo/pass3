@@ -1,7 +1,15 @@
 #!/usr/bin/env python3
 """
 THIS IS A TEST SCRIPT, NOT MEANT FOR PRODUCTION USE
-Launch one worker script over many input files with one shared photospline label.
+Launch one worker script over many input files to allow for shared photospline
+tables using python subprocess, i.e. this invokes separate python instances
+for each file. Photospline-service internally handles the shared memory
+management for the tables. 
+
+This is to decrease the memory footprint of running millipoede and monopod in the final muon and cascade filter reconstruction. Currently the it takes ~7-8
+ GB 
+
+
 """
 
 from __future__ import annotations
