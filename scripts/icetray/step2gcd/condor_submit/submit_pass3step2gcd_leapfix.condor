@@ -1,0 +1,29 @@
+my_work = /data/user/i3filter
+my_scratch = /scratch/i3filter
+my_dir = IC86_OfflineProcessing/OfflineSubmitScripts_pass3step2gcd_leapfix_test
+
+initialdir = $(my_work)/$(my_dir)
+executable = $(initialdir)/src/pass3/leapfix/scripts/icetray/step2gcd/leapfix_gcdfile.sh 
+
+request_memory = 7000
+
+should_transfer_files = YES
+
+condor_file = $(my_scratch)/$(my_dir)/$Fn(Item).$(Cluster).$(Process).condor
+log    = $(condor_file).log
+output = $(condor_file).out
+error  = $(condor_file).err
+
+#notification = Error
+notify_user = rsnihur@icecube.wisc.edu
+
+arguments = $(Item)
+
+# 1 job
+#queue Item matching /data/ana/IceCube/2017/filtered/OfflinePass3.0/0301/Run00129239/OfflinePass3_IC86.2016_data_Run00129239_0301_90_299_GCD.i3.zst
+# 1 job
+#queue Item matching /data/ana/IceCube/2017/filtered/OfflinePass3.0/0309/Run00129271/OfflinePass3_IC86.2016_data_Run00129271_0309_90_300_GCD.i3.zst
+# 92 jobs
+#queue Item matching /data/ana/IceCube/2017/filtered/OfflinePass3.0/03??/Run00??????/*_data_Run00*_GCD.i3.zst
+# 435 jobs
+queue Item matching /data/ana/IceCube/2017/filtered/OfflinePass3.0/0[1-5]??/Run00??????/*2016_data_Run00*_GCD.i3.zst
