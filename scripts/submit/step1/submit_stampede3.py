@@ -228,10 +228,10 @@ def write_srun_multiprog(file: Path,
             local_bundle = local_bundle_by_archive.get(bundle, bundle) if local_bundle_by_archive else bundle
             # TACC has their own apptainer binary
             f.write(f"{i}  /opt/apps/tacc-apptainer/1.3.3/bin/apptainer ")
-            f.write(f"exec -B /home1/04799/tg840985/pass3:/opt/pass3 ")
+            f.write(f"exec -B /home1/11739/ehobert/pass3:/opt/pass3 ")
             # Moving the heavy pieces, i.e. splines, out of the container
             # Just makes it easier to build the container
-            f.write(f"-B /work/04799/tg840985/vista/splines/splines:/cvmfs/icecube.opensciencegrid.org/data/photon-tables/splines ")
+            f.write(f"-B /work/11739/ehobert/vista/splines/splines:/cvmfs/icecube.opensciencegrid.org/data/photon-tables/splines ")
             f.write(f"-B /work2 -B /scratch {apptainer_container} {env_shell} ")
             f.write(f"python3 {script} --bundle {local_bundle} --gcddir {gcddir} ")
             f.write(f"--outdir {outdir}/{year}/{date} --checksum {checksum} ")
@@ -353,7 +353,7 @@ if __name__ == "__main__":
                         help="path of multiprogfilr to write",
                         type=Path,
                         required=True,
-                        default=Path("/home1/04799/tg840985/test.multiprog"))
+                        default=Path("/home1/11739/ehobert/test.multiprog"))
     parser.add_argument("--month",
                         help="month to process",
                         type=int,

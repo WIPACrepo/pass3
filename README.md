@@ -54,7 +54,7 @@ Using
 
 This is how this looks for me:
 
-`rsync -aviP $ARCHIVER:/scoutfs/projects/TG-PHY150040/data/exp/IceCube/2024/unbiased/PFRaw/09* /scratch/04799/tg840985/tmp.v2/2024/`
+`rsync -aviP $ARCHIVER:/scoutfs/projects/TG-PHY150040/data/exp/IceCube/2024/unbiased/PFRaw/09* $SCRATCH/rawdata/2024/`
 
 `$ARCHIVER` is `ranch.tacc.utexas.edu`
 
@@ -90,12 +90,12 @@ The scripts are setup to work in month data increments. Once you have
 transferred a month worth data to your temporary location 
 
 ```
-YEAR=2024; MONTH=2; python3 $HOME/pass3/scripts/submit/step1/submit_stampede3.py --container /scratch/04799/tg840985/pass3_cvmfs_v4.4.2_icetray_v1.17.0_arm.sif --scratchdir /scratch/04799/tg840985/tmp_scratch/ --submitfile /home1/04799/tg840985/pass3/submit_files/${YEAR}/${YEAR}_${MONTH}_new_gcd.slurm --checksum-file /home1/04799/tg840985/pass3/data/checksums.sha512sum --year ${YEAR} --month ${MONTH} --gcddir /work/04799/tg840985/stampede3/GCD.v2/ --multiprogfile /home1/04799/tg840985/pass3/submit_files/${YEAR}/${YEAR}_${MONTH}_new_gcd.multiprog --slurmqueue gg --numcores 100 --allocation PHY20012 --grl /home1/04799/tg840985/pass3/data/grl.pass3 --badfiles /home1/04799/tg840985/pass3/data/known_bad_files --cpuarch aarch64 --bundlesready --bundledir $SCRATCH/tmp.v2/ --outdir $SCRATCH/testout.v2/${YEAR} --duplicate-skip-dir /home1/04799/tg840985/pass3/submit_files/${YEAR}/skip/
+YEAR=2024; MONTH=2; python3 $HOME/pass3/scripts/submit/step1/submit_stampede3.py --container $HOME/pass3_cvmfs_v4.4.2_icetray_v1.17.0_arm.sif --scratchdir $SCRATCH/tmp_scratch/ --submitfile $HOME/pass3/submit_files/${YEAR}/${YEAR}_${MONTH}_new_gcd.slurm --checksum-file $HOME/pass3/data/checksums.sha512sum --year ${YEAR} --month ${MONTH} --gcddir $WORK/GCD.v2/ --multiprogfile $HOME/pass3/submit_files/${YEAR}/${YEAR}_${MONTH}_new_gcd.multiprog --slurmqueue gg --numcores 100 --allocation PHY20012 --grl $HOME/pass3/data/grl.pass3 --badfiles $HOME/pass3/data/known_bad_files --cpuarch aarch64 --bundlesready --bundledir $SCRATCH/rawdata/ --outdir $SCRATCH/out --duplicate-skip-dir $HOME/pass3/submit_files/${YEAR}/skip/
 ```
 
 An option to note is
 
-`--duplicate-skip-dir /home1/04799/tg840985/pass3/submit_files/${YEAR}/skip/`
+`--duplicate-skip-dir /home1/11739/ehobert/pass3/submit_files/${YEAR}/skip/`
 
 this will look for duplicates across the contents of different bundles.
 There are bundles that contain the same file. This internal algorithm
@@ -104,6 +104,10 @@ picks one of the two duplicates to process and ignores the other.
 On Vista, we need to limit the number of cores. There are total of 144 cores
 and 237 GB per Grace-Grace node. The code uses ~2.2 GB RAM per instance.
 
+the config above is tight. a memory-heavy month can hit `MemoryError`, and a slow month can run
+past the 24-hour limit. if either happens, rerun with `--numcores 64` for memory, or request a
+longer wall time for time. reruns are safe, existing outputs get skipped.
+
 A sample of a SLURM submit file is:
 
 ```
@@ -111,20 +115,20 @@ A sample of a SLURM submit file is:
 #SBATCH -t 24:00:00
 #SBATCH -A PHY20012
 #SBATCH -p gg
-#SBATCH -J /home1/04799/tg840985/pass3/submit_files/2022/2022_1_new_gcd.slurm
+#SBATCH -J /home1/11739/ehobert/pass3/submit_files/2022/2022_1_new_gcd.slurm
 #SBATCH -N 32
 #SBATCH -n 32
-#SBATCH -o /home1/04799/tg840985/pass3/submit_files/2022/2022_1_new_gcd.slurm.o.%j
-#SBATCH -e /home1/04799/tg840985/pass3/submit_files/2022/2022_1_new_gcd.slurm.e.%j
+#SBATCH -o /home1/11739/ehobert/pass3/submit_files/2022/2022_1_new_gcd.slurm.o.%j
+#SBATCH -e /home1/11739/ehobert/pass3/submit_files/2022/2022_1_new_gcd.slurm.e.%j
 
 echo `date`
 
 LD_PRELOAD=
 
-if [ ! -e /home1/04799/tg840985/pass3/submit_files/2022/2022_1_new_gcd.multiprog0.done ]; then
-echo Starting /home1/04799/tg840985/pass3/submit_files/2022/2022_1_new_gcd.multiprog0
+if [ ! -e /home1/11739/ehobert/pass3/submit_files/2022/2022_1_new_gcd.multiprog0.done ]; then
+echo Starting /home1/11739/ehobert/pass3/submit_files/2022/2022_1_new_gcd.multiprog0
 echo `date`
-srun --nodes=32 --ntasks-per-node=1 --exclusive --cpus-per-task=$SLURM_CPUS_ON_NODE --multi-prog /home1/04799/tg840985/pass3/submit_files/2022/2022_1_new_gcd.multiprog0 && touch /home1/04799/tg840985/pass3/submit_files/2022/2022_1_new_gcd.multiprog0.done || touch /home1/04799/tg840985/pass3/submit_files/2022/2022_1_new_gcd.multiprog0.failed
+srun --nodes=32 --ntasks-per-node=1 --exclusive --cpus-per-task=$SLURM_CPUS_ON_NODE --multi-prog /home1/11739/ehobert/pass3/submit_files/2022/2022_1_new_gcd.multiprog0 && touch /home1/11739/ehobert/pass3/submit_files/2022/2022_1_new_gcd.multiprog0.done || touch /home1/11739/ehobert/pass3/submit_files/2022/2022_1_new_gcd.multiprog0.failed
 fi
 ```
 
@@ -139,13 +143,15 @@ take a bundle (and necessary information for said bundle) and process it.
 An example "program" line for multiprog file:
 
 ```
-0  /opt/apps/tacc-apptainer/1.3.3/bin/apptainer exec -B /home1/04799/tg840985/pass3:/opt/pass3 -B /work/04799/tg840985/vista/splines/splines:/cvmfs/icecube.opensciencegrid.org/data/photon-tables/splines -B /work2 -B /scratch /scratch/04799/tg840985/pass3_cvmfs_v4.4.2_icetray_v1.17.0_arm.sif /cvmfs/icecube.opensciencegrid.org/py3-v4.4.2/RHEL_9_aarch64/metaprojects/icetray/v1.17.0/bin/icetray-shell python3 /opt/pass3/scripts/icetray/step1/run_step1.py --bundle /scratch/04799/tg840985/tmp.v2/2022/0101/24a633c4f11c11ecb5b232208fe3aaeb.zip --gcddir /work2/04799/tg840985/stampede3/GCD.v2 --outdir /scratch/04799/tg840985/testout.v2/2022/0101 --checksum 3e08159c72bb6e7a37aaeb6ae0389ba8aa6d98c14b90e9296c6e77f8544ebb4f9bb241a479443b4707e5f53db4bbe9a542774a98ad197907f0dad2b645e40254 --scratchdir /scratch/04799/tg840985/tmp.v2/2022 --grl /home1/04799/tg840985/pass3/data/grl.pass3 --badfiles /home1/04799/tg840985/pass3/data/known_bad_files  --duplicate-skip-json /home1/04799/tg840985/pass3/submit_files/2022/skip/24a633c4f11c11ecb5b232208fe3aaeb.zip.duplicate_skip.json --maxnumcpus 100
+0  /opt/apps/tacc-apptainer/1.3.3/bin/apptainer exec -B /home1/11739/ehobert/pass3:/opt/pass3 -B /work/11739/ehobert/vista/splines/splines:/cvmfs/icecube.opensciencegrid.org/data/photon-tables/splines -B /work2 -B /scratch /home1/11739/ehobert/pass3_cvmfs_v4.4.2_icetray_v1.17.0_arm.sif /cvmfs/icecube.opensciencegrid.org/py3-v4.4.2/RHEL_9_aarch64/metaprojects/icetray/v1.17.0/bin/icetray-shell python3 /opt/pass3/scripts/icetray/step1/run_step1.py --bundle /scratch/11739/ehobert/rawdata/2022/0101/24a633c4f11c11ecb5b232208fe3aaeb.zip --gcddir /work/11739/ehobert/GCD.v2 --outdir /scratch/11739/ehobert/out/2022/0101 --checksum 3e08159c72bb6e7a37aaeb6ae0389ba8aa6d98c14b90e9296c6e77f8544ebb4f9bb241a479443b4707e5f53db4bbe9a542774a98ad197907f0dad2b645e40254 --scratchdir /scratch/11739/ehobert/tmp_scratch --grl /home1/11739/ehobert/pass3/data/grl.pass3 --badfiles /home1/11739/ehobert/pass3/data/known_bad_files  --duplicate-skip-json /home1/11739/ehobert/pass3/submit_files/2022/skip/24a633c4f11c11ecb5b232208fe3aaeb.zip.duplicate_skip.json --maxnumcpus 100
 ```
 
 `0`: is a label for the program in the multiprog file.
 `/opt/apps/tacc-apptainer/1.3.3/bin/apptainer`: Apptainer is a Go binary, so you can just grab it without loading the module
-` -B /home1/04799/tg840985/pass3:/opt/pass3`: Gets the pass3 code pieces into the container
-`-B /work/04799/tg840985/vista/splines/splines:/cvmfs/icecube.opensciencegrid.org/data/photon-tables/spline`:  the necessary splines for the realtime filter:
+` -B /home1/11739/ehobert/pass3:/opt/pass3`: Gets the pass3 code pieces into the container
+`-B /work/11739/ehobert/vista/splines/splines:/cvmfs/icecube.opensciencegrid.org/data/photon-tables/spline`:  the necessary splines for the realtime filter:
+
+splines come from the icecube cvmfs mount at `icecube.opensciencegrid.org/data/photon-tables/splines`.
 
 One key aspect is that number of nodes passed to `srun` needs to match 
 the number of "programs" in the multiprog file, so for some years and 
