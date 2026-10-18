@@ -6,19 +6,27 @@
 
 '''
 HOW TO RUN IT:
-python icetopify_gcdfile.py -i /data/ana/IceCube/2022/filtered/OnlinePass3.6/GCD/OnlinePass3_IC86.2021_data_Run00136124_81_647_GCD.i3.zst -o test_GCD.i3 --log-file test_GCD.log
+## gcdserver era (will throw an error, unless in test mode)
+python icetopify_gcdfile.py -i /data/ana/IceCube/2022/filtered/OnlinePass3.6/GCD/OnlinePass3_IC86.2021_data_Run00136124_81_647_GCD.i3.zst -o test_GCD.i3 --log-file test_GCD.log --testmode
+## pre-gcdserver era
+python icetopify_gcdfile.py -i /data/ana/IceCube/2016/filtered/OnlinePass3/GCD/OnlinePass3_IC86.2016_data_Run00129000_1231_89_290_GCD.i3.zst -o test_GCD.i3 --log-file test_GCD.log
+## file not yet available (will throw an error, unless in test mode)
+python icetopify_gcdfile.py -i /data/ana/IceCube/2012/filtered/OnlinePass3.6/GCD/OnlinePass3_IC86.2012_data_Run00120380_0625_1_20_GCD.i3.zst -o test_GCD.i3 --log-file test_GCD.log
+
 '''
 
 
-
+import os
 import re
 import argparse
+import glob
 from icecube.icetray import I3Tray, OMKey
 from icecube import icetray, dataclasses, dataio  #noqa: F401
 from icecube.icetray import logging
 from icecube.offline_filterscripts.icetop_GCDmodification.overwrite_snowheights import ChangeSnowHeights_FromDB
 from icecube.offline_filterscripts.icetop_GCDmodification.add_ATWDcrossovers_to_Dframe import Add_ATWDCrossoverMap_Dframe
 from AddSLCCalibration_fromjson import AddSLCCalibrationCollection_fromjson
+from UpdateVEMCal import UpdateVEMCal
 
 ## ------------------- HELPER FUNCTIONS --------------------------------
 ## For parsing filenames to get the Run Number. 
@@ -29,6 +37,29 @@ def get_run_from_filename(input_file):
     if not m:
         raise ValueError("cannot parse %s for Run number" % input_file)
     return int(m.group(1))
+
+## For parsing the names of json files, such as "IceTopSLCCal_123456-123789.json"
+def get_range_from_filename(input_file):
+    result = None
+    # Parse the filename to get the start/end run number
+    m = re.search(r"1(\d{5})-1(\d{5})", input_file)
+    if not m:
+        raise ValueError("cannot parse %s for start/end Run numbers" % input_file)
+    rlist = m.group(0).split("-")
+    return [int(rlist[0]), int(rlist[1])]
+
+def find_file_from_range(searchdir, r):
+    flist = sorted(glob.glob(searchdir + "/*.*"))  # Could be .json (SLC) or .xml (VEMCal)
+    filename_found = ""
+    for f in flist:
+        [r1, r2] = get_range_from_filename(f)
+        if (r1<=r) and (r<=r2):
+            # We found it!
+            filename_found = f
+            continue
+    if filename_found=="":
+        raise Exception("ERROR: didn't find run %s in the list of files available."%r)
+    return filename_found
 
 ## Create a ATWDCrossoverMap full of simple placeholder values
 def placeholder_for_Dframe(frame, objectname="IceTop_ATWDCrossoverMap"):
@@ -49,6 +80,7 @@ def placeholder_for_Dframe(frame, objectname="IceTop_ATWDCrossoverMap"):
     # Put the new object in the frame
     frame[objectname] = newobject
 
+    
 ## ------------------- THE TRAY --------------------------------
 def runme(infile, outfile, *, testmode=True, **kwargs): #, *, skip_audit=False, production_version=-1, **kwargs):
     """Run procedure for adding IceTop calibration objects to a GCD file."""
@@ -76,10 +108,7 @@ def runme(infile, outfile, *, testmode=True, **kwargs): #, *, skip_audit=False, 
     # Deal with SNOW
     tray.Add(ChangeSnowHeights_FromDB, "updateSnowHeights", Run = run_id)
 
-    # Deal with VEMCal
-    # <insert me when the time comes!!>
 
-    # Deal with SLCCal
     ## This bit is temporary, for pass3step2 TESTING ONLY.  If Kath hasn't computed ITSLC calibration constants yet,
     ## then we'll create some fake ones, designed to be really obvious (if looked at) that they are fake.
     if testmode:
@@ -96,17 +125,41 @@ def runme(infile, outfile, *, testmode=True, **kwargs): #, *, skip_audit=False, 
         ## Create the D-frame object, with more simple placeholder values, so that future people will recognize it as fake
         tray.Add(placeholder_for_Dframe, "add_Dframe_placeholder",
                  Streams=[icetray.I3Frame.DetectorStatus])
+
     else:
-        ## TO-DO: Create the C-frame object for realsies!
-        ## Create the D-frame object, for realsies.
-        tray.Add(Add_ATWDCrossoverMap_Dframe, "makeCrossoverMap")
+        # You should NOT be using this script if dealing with a run from the "gcdserver era".
+        # This is for runs where we will look on disk for the SLCCal and VEMCal files we need
+        if run_id >= 129365:  # The first run of the "gcdserver era"
+            raise Exception("This is a run from the gcdserver era!  You should not be using this script for this purpose.")
+
+        ## Overwrite the VEMCal's
+        tray.Add(UpdateVEMCal, 'override_VEMcals',
+                 Runnumber   = run_id,
+                 XMLDir = '/data/ana/CosmicRay/IceTop_OfflineCalib/vemcal_forpass3_ic86-2011-17' # the default
+        )
+        
+        ## Create the C-frame object.
+        slccal_filename = find_file_from_range("/data/ana/CosmicRay/IceTop_OfflineCalib/slccal_forpass3_ic86-2011-17", run_id)
+        logging.log_info("I'm using IceTop SLC constants from %s"%slccal_filename)
+        tray.Add(AddSLCCalibrationCollection_fromjson, 'add_Cframe_forrealsies',
+                 SLCCalibFile   = slccal_filename,
+                 Provenance = dataclasses.ITSLCCalProvenance.PFFiltRaw
+        )
+        ## Create the D-frame object.
+        if (run_id < 127950):  ## Start of IC86.2016
+            raise Exception("This is a run from before IC86.2016, for which we don't have a good CrossoverCatalog yet.  Come back later when Kath has made one.")
+        # This catalog was made from data start of IC86.2016 -> Orc death
+        COPMapFilename = os.path.expandvars("${I3_BUILD}")+"/offline_filterscripts/resources/data/slccal/CrossoverCatalog_pass3step1_2016-2022.txt"
+        tray.Add(Add_ATWDCrossoverMap_Dframe, "makeCrossoverMap",
+                 copCalcCatalog = COPMapFilename)
+
 
     # Write output
     logging.log_info("Writing to: %s"%outfile)
     streams = [icetray.I3Frame.Geometry, icetray.I3Frame.Calibration,
                icetray.I3Frame.TrayInfo,
                icetray.I3Frame.DetectorStatus]
-    tray.Add("I3Writer", filename=outfile, Streams=streams)
+    tray.Add("I3Writer", filename=outfile, Streams=streams, TrayInfoPrefix='IceTopify_GCD')
 
     # Execute!
     tray.Execute()
@@ -129,6 +182,8 @@ def main():
                         help="Output GCD i3 filename")
     parser.add_argument("-r", "--run", type=int, dest = "run_id", required=False,
                         help="Run Number")
+    parser.add_argument("--testmode", default=False, action="store_true",
+                        help="Test mode with IceTop placeholders?")
     '''
     parser.add_argument("--skip_audit", default=False, action="store_true",
                         help="Skip auditor")

@@ -83,46 +83,11 @@ class UpdateVEMCal(icetray.I3Module):
             key                    = icetray.OMKey(string, om)
             if key not in self.vemcal_l3.keys():
                 vemcal                 = dataclasses.I3VEMCalibration()
-                vemcal.pe_per_vem      = self._value(dom, 'pePerVEM', float)
-                vemcal.mu_peak_width   = self._value(dom, 'muPeakWidth', float)
-                vemcal.hglg_cross_over = self._value(dom, 'hglgCrossOver', float)
+                vemcal.pe_per_vem      = round(self._value(dom, 'pePerVEM', float), 4)
+                vemcal.mu_peak_width   = round(self._value(dom, 'muPeakWidth', float), 4)
+                vemcal.hglg_cross_over = round(self._value(dom, 'hglgCrossOver', float), 2)
                 vemcal.corr_factor     = self._value(dom, 'corrFactor', float)
-                self.vemcal_l3[key]    = vemcal
-                
-        
-        '''
-        good_vemcal_index=self.vemcal_files.index(vc)
-        i=0
-        # During first VEMCal checks, we saw that the values used for VEMCal during the below period were bad.
-        # (Shown in presentation during CR call https://wiki.icecube.wisc.edu/index.php/CR_phone_call_2016-12-19)
-        # Therefore, we will exclude those files and use the values of the files before that.
-        VEMCal_files_not_to_use=["VEM_calibration_2011-12-15.xml","VEM_calibration_2012-01-01.xml","VEM_calibration_2012-01-15.xml","VEM_calibration_2012-02-01.xml"]
-        while (len(l2_domkeys)!=len(self.vemcal_l3.keys()) and good_vemcal_index-i>=0):
-            vc_file=self.vemcal_files[good_vemcal_index-i]
-            if vc_file.split("/")[-1] in VEMCal_files_not_to_use:
-                i=i+1
-                icetray.logging.log_info("Trying to use file: %s but we do not trust the VEMCals in this file so will omit it." %vc_file)
-                continue
-            if i >0:
-                for key in l2_domkeys:
-                    if key not in self.vemcal_l3.keys():
-                        icetray.logging.log_info("OMKey %i,%i not found in previous VEMCal file (or we do not trust the file), looking into previous file now: %s " %(key.string, key.om, vc_file))
-            tree=ElementTree.parse(vc_file)
-            root=tree.getroot()
-            for dom in root.findall('DOM'):
-                string                 = self._value(dom, 'StringId', int)
-                om                     = self._value(dom, 'TubeId', int)
-                key                    = icetray.OMKey(string, om)
-                if key not in self.vemcal_l3.keys():
-                    vemcal                 = dataclasses.I3VEMCalibration()
-                    vemcal.pe_per_vem      = self._value(dom, 'pePerVEM', float)
-                    vemcal.mu_peak_width   = self._value(dom, 'muPeakWidth', float)
-                    vemcal.hglg_cross_over = self._value(dom, 'hglgCrossOver', float)
-                    vemcal.corr_factor     = self._value(dom, 'corrFactor', float)
-                    self.vemcal_l3[key]    = vemcal
-
-            i=i+1
-        '''
+                self.vemcal_l3[key]    = vemcal                
         
     # Find appropriate VEMCal XML file.
     def _find_VEMCal_file(self):
